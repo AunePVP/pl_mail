@@ -81,6 +81,9 @@ final readonly class SenderAuthentication
     private const array KNOWN_RECEIVERS = [
         'gmail.com'      => 'google.com',
         'googlemail.com' => 'google.com',
+        // FORK (FORK.md): iCloud Mail is read on imap.mail.me.com and received
+        // under dmarc.icloud.com, spf.icloud.com, dkim-verifier.icloud.com, …
+        'me.com'         => 'icloud.com',
     ];
 
     public function verdict(Message $message): SenderVerdict
@@ -91,10 +94,19 @@ final readonly class SenderAuthentication
             return SenderVerdict::Unknown;
         }
 
-        $believed = $this->believedLines($message);
+        // FORK (FORK.md): lines that report none of dmarc/dkim/spf (iCloud's
+        // separate BIMI and ARC lines) are dropped instead of failing.
+        $believed = array_values(array_filter(
+            $this->believedLines($message),
+            fn (string $line): bool => [] !== $this->results($line),
+        ));
 
         if ([] === $believed) {
             return SenderVerdict::Unknown;
+        }
+
+        if (true === $this->isOneReport($believed)) {
+            return true === $this->reportPasses($believed, $fromDomain) ? SenderVerdict::Pass : SenderVerdict::Fail;
         }
 
         foreach ($believed as $line) {
@@ -107,6 +119,66 @@ final readonly class SenderAuthentication
     }
 
     // ── Private ───────────────────────────────────────────────────────────────
+
+    /**
+     * FORK (FORK.md): one server's report split over several lines?
+     *
+     * iCloud writes a line per method, and a dkim-verifier line per signature:
+     * mail signed by the sender and by its mailing platform carries an aligned
+     * and an unaligned DKIM line beside `dmarc=pass`. Held to "every line has
+     * to pass", the platform's line failed all of it. Read together they are
+     * the single line Gmail writes. Two lines that both report DMARC are not
+     * one report but a disagreement, and keep the rule from the class docblock.
+     *
+     * @param list<string> $lines
+     */
+    private function isOneReport(array $lines): bool
+    {
+        $dmarc = array_filter($lines, fn (string $line): bool => isset($this->results($line)['dmarc']));
+
+        return 1 >= count($dmarc);
+    }
+
+    /**
+     * FORK (FORK.md): the report read as one line. The receiver checked
+     * alignment itself when it wrote `dmarc=fail`, so an aligned DKIM or SPF
+     * pass on another line does not overrule it.
+     *
+     * @param list<string> $lines
+     */
+    private function reportPasses(array $lines, string $fromDomain): bool
+    {
+        $dmarc = null;
+
+        foreach ($lines as $line) {
+            $dmarc ??= $this->results($line)['dmarc'] ?? null;
+        }
+
+        if (null !== $dmarc && 'pass' !== $dmarc && 'none' !== $dmarc) {
+            return false;
+        }
+
+        return $this->passes(implode('; ', $lines), $fromDomain);
+    }
+
+    /**
+     * FORK (FORK.md): the dmarc, dkim and spf results a line reports, method →
+     * result of its first occurrence.
+     *
+     * @return array<string, string>
+     */
+    private function results(string $line): array
+    {
+        $results = [];
+
+        foreach (explode(';', strtolower($line)) as $result) {
+            if (1 === preg_match('/^\s*(dmarc|dkim|spf)\s*=\s*([a-z]+)/', $result, $match)) {
+                $results[$match[1]] ??= $match[2];
+            }
+        }
+
+        return $results;
+    }
 
     /**
      * The Authentication-Results lines written by the account's own receiving

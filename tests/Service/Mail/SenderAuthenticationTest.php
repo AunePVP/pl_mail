@@ -72,6 +72,44 @@ final class SenderAuthenticationTest extends TestCase
             ['mx.example.org; dmarc=fail header.from=airline.example', 'mx.example.org; ' . $pass],
             SenderVerdict::Fail,
         ];
+
+        // FORK (FORK.md): iCloud, one line per method and one per DKIM signature.
+        $icloud = [
+            'bimi.icloud.com; bimi=pass header.d=booking.com header.selector=default policy.authority=pass',
+            'arc.icloud.com; arc=none',
+            'dmarc.icloud.com; dmarc=pass header.from=booking.com',
+            'dkim-verifier.icloud.com; dkim=pass header.d=booking.com header.i=noreply@booking.com header.b=abc',
+            'spf.icloud.com; spf=pass (domain of mailer.booking.com designates 1.2.3.4 as permitted sender) smtp.mailfrom=noreply@mailer.booking.com',
+            'bimi.icloud.com',
+        ];
+
+        yield 'icloud: a line per method' => ['imap', 'imap.mail.me.com', 'noreply@booking.com', $icloud, SenderVerdict::Pass];
+        yield 'icloud: a failing BIMI line says nothing about the sender' => [
+            'imap', 'imap.mail.me.com', 'noreply@booking.com',
+            ['bimi.icloud.com; bimi=fail reason="certificate expired"', ...array_slice($icloud, 1)],
+            SenderVerdict::Pass,
+        ];
+        yield 'icloud: the mailing platform\'s own signature beside the sender\'s' => [
+            'imap', 'imap.mail.me.com', 'noreply@booking.com',
+            [...$icloud, 'dkim-verifier.icloud.com; dkim=pass header.d=platform.example header.i=@platform.example', 'spf.icloud.com'],
+            SenderVerdict::Pass,
+        ];
+        yield 'icloud: only BIMI and ARC lines' => ['imap', 'imap.mail.me.com', 'noreply@booking.com', array_slice($icloud, 0, 2), SenderVerdict::Unknown];
+        yield 'icloud: no dmarc record, only unaligned passes' => [
+            'imap', 'imap.mail.me.com', 'a@airline.example',
+            ['dmarc.icloud.com; dmarc=none header.from=airline.example', 'dkim-verifier.icloud.com; dkim=pass header.d=evil.example', 'spf.icloud.com; spf=pass smtp.mailfrom=x@evil.example'],
+            SenderVerdict::Fail,
+        ];
+        yield 'icloud: an aligned DKIM line does not overrule dmarc=fail' => [
+            'imap', 'imap.mail.me.com', 'a@airline.example',
+            ['dmarc.icloud.com; dmarc=fail header.from=airline.example', 'dkim-verifier.icloud.com; dkim=pass header.d=airline.example'],
+            SenderVerdict::Fail,
+        ];
+        yield 'icloud: two DMARC lines that disagree' => [
+            'imap', 'imap.mail.me.com', 'noreply@booking.com',
+            [...$icloud, 'dmarc.icloud.com; dmarc=fail header.from=booking.com'],
+            SenderVerdict::Fail,
+        ];
     }
 
     /**
