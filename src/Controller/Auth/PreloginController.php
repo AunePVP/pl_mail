@@ -53,6 +53,16 @@ final class PreloginController extends AbstractController
 
         $user = $this->users->findOneBy(['email' => $email]);
 
+        // FORK (FORK.md): the placeholder salt is keyed on the lower-cased
+        // address, the lookup above is not. A known address spelled in another
+        // case got the placeholder while its exact spelling got the stored
+        // salt; for an unknown address both spellings answer the same. Two
+        // requests told whether an account exists. Same spelling, same answer.
+        if (null === $user) {
+            $matches = $this->users->findUndeletedByEmailIgnoringCase($email);
+            $user    = 1 === count($matches) ? $matches[0] : null;
+        }
+
         return new JsonResponse($this->kdf->parametersFor($user, $email), headers: [
             // An answer about one person's account, given to whoever asked.
             'Cache-Control' => 'no-store',
