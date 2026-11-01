@@ -35,9 +35,13 @@ etwas so ist und welcher Fehler damit schon einmal behoben wurde. Lies sie, bevo
    statt neuer Spalten in bestehenden Tabellen.
 4. **Fehler auch ans Original.** Ist eine Änderung eine Fehlerbehebung, die allen hilft, dem Nutzer
    vorschlagen, sie auch beim Original einzureichen (dort: erst Issue, dann PR, siehe
-   CONTRIBUTING.md). **Nie selbst** ein Issue, einen Kommentar oder PR beim Original erstellen,
-   ohne dass der Nutzer es ausdrücklich freigegeben hat. Der Remote `upstream` ist nur zum Holen da,
-   Push dorthin ist gesperrt.
+   CONTRIBUTING.md). Vorschlagen ja, selbst handeln nein: **Nichts geht zum Original
+   (karatektus/pl_mail), ohne dass der Nutzer es ausdrücklich sagt** – kein Push, kein Branch,
+   kein PR, kein Issue, kein Kommentar, kein Review. Die Freigabe gilt nur für den einen Fall,
+   nicht für spätere. „Mergen“, „PR aufmachen“ oder „pushen“ ohne ausdrückliche Nennung des
+   Originals meint immer den Fork. Der Remote `upstream` ist nur zum Holen da, Push dorthin ist
+   gesperrt; das nicht umgehen (Push-URL nicht umbiegen, kein `gh … --repo karatektus/pl_mail`
+   mit schreibender Wirkung).
 5. **Öffentlich.** Der Fork ist öffentlich. Nie committen: Passwörter, App-Passwörter, Tokens,
    `.env`-Geheimnisse, Mailinhalte, Namen von Kunden, interne Hostnamen oder IP-Adressen,
    Zertifikate von Firmenservern. Betriebsdaten eines Servers gehören in `CLAUDE.local.md` dort
