@@ -45,8 +45,10 @@ jobs:
             - name: Choose platforms for this event
               id: platforms
               shell: bash
+              # FORK (FORK.md): this fork deploys from `main` on both an arm64 and an
+              # amd64 host, so every build is both architectures.
               run: |
-                  if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+                  if [[ "$GITHUB_REF" == refs/tags/v* || "$GITHUB_REPOSITORY" != karatektus/pl_mail ]]; then
                       echo 'matrix={"include":[{"platform":"linux/amd64","arch":"amd64","runner":"ubuntu-latest"},{"platform":"linux/arm64","arch":"arm64","runner":"ubuntu-24.04-arm"}]}' >> "$GITHUB_OUTPUT"
                   else
                       echo 'matrix={"include":[{"platform":"linux/amd64","arch":"amd64","runner":"ubuntu-latest"}]}' >> "$GITHUB_OUTPUT"

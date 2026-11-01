@@ -64,3 +64,6 @@ todo.md
 /build/
 ###< plmail site ###
 .claude/
+
+# FORK (FORK.md): local notes for Claude on one machine, never committed
+/CLAUDE.local.md

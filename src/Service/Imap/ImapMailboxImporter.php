@@ -120,7 +120,7 @@ final readonly class ImapMailboxImporter
             return ImapImportOutcome::Finished;
         }
 
-        $page       = array_slice($missing, 0, self::PAGE_SIZE);
+        $page       = $this->capBySize($session, $path, array_slice($missing, 0, self::PAGE_SIZE));
         $lowestHeld = null;
 
         // A UID the server listed and then returned nothing for comes back
@@ -174,7 +174,18 @@ final readonly class ImapMailboxImporter
      */
     private function missingBelow(Mailbox $mailbox, ImapSession $session, string $path, int $floor): array
     {
-        $onServer = ImapUidSearch::range($session, $path, sprintf('1:%d', $floor - 1));
+        // FORK (FORK.md): history only from IMPORT_SINCE (YYYY-MM-DD) on. SINCE compares the
+        // server's arrival date (INTERNALDATE); older mail does not count as missing, and the
+        // folder is finished once everything from that date is here. New mail (MessageSyncer,
+        // above lastSeenUid) is not affected. Empty = upstream behaviour, the whole history.
+        $since    = trim((string) getenv('IMPORT_SINCE'));
+        $criteria = sprintf('1:%d', $floor - 1);
+
+        if ('' !== $since) {
+            $criteria .= ' SINCE ' . (new \DateTimeImmutable($since))->format('j-M-Y');
+        }
+
+        $onServer = ImapUidSearch::range($session, $path, $criteria);
 
         // `1:n` on a folder whose highest UID is below n answers with that
         // highest one, the way `*` does. Anything at or above the floor has
@@ -192,6 +203,62 @@ final readonly class ImapMailboxImporter
         rsort($missing);
 
         return $missing;
+    }
+
+    /**
+     * FORK (FORK.md): a page is also capped by size, not only by count.
+     *
+     * A page is otherwise PAGE_SIZE messages however large they are. Pages of a
+     * real mailbox measured up to 569 MB; parsing one takes several times that,
+     * and the worker died at PHP's memory_limit (2 GB) on the same page every
+     * time, so the import never moved. The sizes of the candidates are asked for
+     * first (one small FETCH RFC822.SIZE) and the page ends before the message
+     * that would take it past IMPORT_PAGE_BYTES. At least one message is always
+     * kept, so a single large message is still fetched; the rest is the next
+     * page. 0 or empty = upstream behaviour.
+     *
+     * @param list<int> $page highest UID first
+     *
+     * @return list<int>
+     */
+    private function capBySize(ImapSession $session, string $path, array $page): array
+    {
+        $cap = (int) (getenv('IMPORT_PAGE_BYTES') ?: 0);
+
+        if ($cap <= 0 || count($page) < 2) {
+            return $page;
+        }
+
+        $sizes = [];
+
+        foreach ($session->uidFetch($path, ImapSession::uidSet($page), ['RFC822.SIZE']) as $uid => $items) {
+            $sizes[(int) $uid] = (int) ($items['RFC822.SIZE'] ?? 0);
+        }
+
+        $kept  = [];
+        $bytes = 0;
+
+        foreach ($page as $uid) {
+            $size = $sizes[$uid] ?? 0;
+
+            if ([] !== $kept && $bytes + $size > $cap) {
+                break;
+            }
+
+            $kept[] = $uid;
+            $bytes += $size;
+        }
+
+        if (count($kept) < count($page)) {
+            $this->logger->info('Import: page cut by size', [
+                'mailbox'  => $path,
+                'messages' => count($kept),
+                'of'       => count($page),
+                'bytes'    => $bytes,
+            ]);
+        }
+
+        return $kept;
     }
 
     /**
