@@ -61,6 +61,9 @@ Parsen sterben, 76 Neustarts in 5 h, Import stand. Mit 100 MB (`100000000`) läu
 `.github/workflows/docker.yml`, Job `setup`: im Fork (`GITHUB_REPOSITORY != karatektus/pl_mail`)
 baut jeder Push auf `main` beide Architekturen, im Original nur ein Release-Tag.
 
+Dazu je ein Schritt „Lowercase the image name“ in den Jobs `build` und `merge`: Docker verlangt
+Kleinbuchstaben, der Kontoname `AunePVP` hat Großbuchstaben (im Original ohne Wirkung).
+
 **Grund:** Der Fork wird direkt von `main` betrieben, auf einem arm64-Host (NVIDIA DGX Spark) und
 geplant auf einem amd64-Host (Unraid). Image: `ghcr.io/aunepvp/pl_mail:main` bzw. `:sha-<commit>`.
 
