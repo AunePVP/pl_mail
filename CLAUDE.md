@@ -81,11 +81,57 @@ Nutzer will genau das. Container-Neustarts vorher ankündigen und bestätigen la
 
 ## Betrieb
 
-Wie und wo der Fork läuft, steht nicht hier, sondern in `CLAUDE.local.md` auf dem jeweiligen
-Server (nicht im Repo). Allgemein:
+Konkrete Adressen, Zugänge und Pfade stehen **nicht** hier (der Fork ist öffentlich), sondern in
+`CLAUDE.local.md` auf dem Rechner, von dem aus betrieben wird. Fehlt die Datei, den Nutzer fragen.
 
-- Installation im All-in-one-Modus: ein plMail-Container plus Postgres
-  (docs/install/unraid.md, docs/install/docker.md).
-- Die Umgebungsvariablen dieses Forks (`IMPORT_SINCE`, `IMPORT_PAGE_BYTES`) sind in FORK.md beschrieben.
-- Ohne `APP_ENCRYPTION_KEY` bzw. das Secrets-Volume sind die gespeicherten Zugangsdaten
+**Aufbau.** plMail läuft auf einem Unraid-Server im All-in-one-Modus (docs/install/unraid.md):
+Container `plmail` (Image `ghcr.io/aunepvp/pl_mail:main`) und `plmail-db` (`postgres:18-alpine`) in
+einem eigenen Docker-Netz, angelegt aus Unraid-Vorlagen (`my-plmail.xml`, `my-plmail-db.xml` unter
+`/boot/config/plugins/dockerMan/templates-user/`). Davor ein Reverse Proxy (Nginx Proxy Manager) mit
+`proxy_buffering off` und langem Read-Timeout (docs/install/reverse-proxy.md). Die KI-Modelle
+laufen auf einem eigenen Rechner und werden über das VPN erreicht (Admin → KI).
+
+- Die Pfade im Container (`/app/var/raw`, `/app/var/attachments`, `/app/var/uploads`,
+  `/app/var/secrets`) **nicht ändern**: plMail speichert Dateipfade als `var/raw/…` bzw.
+  `var/attachments/…` in der Datenbank. Ein anderes `APP_STORAGE_DIR` verwaist alle Anhänge.
+- Ohne `APP_ENCRYPTION_KEY` bzw. den Secrets-Ordner sind die gespeicherten Zugangsdaten
   unlesbar – bei Umzug oder Backup immer mitnehmen (CONTRIBUTING.md → Secrets).
+- Die Umgebungsvariablen dieses Forks (`IMPORT_SINCE`, `IMPORT_PAGE_BYTES`) stehen in FORK.md.
+  Einstellungen am Container ändert der Nutzer in der Unraid-Vorlage (Docker-Tab → plmail → Edit),
+  nicht per `docker run` daneben – sonst überschreibt das nächste Update sie.
+
+### Ausrollen
+
+1. PR im Fork gemergt → `docker.yml` baut `ghcr.io/aunepvp/pl_mail:main` (amd64 + arm64), ca. 15 min.
+   Erst ausrollen, wenn dieser Lauf grün ist (`gh run list --repo AunePVP/pl_mail --branch main`).
+2. Vor Updates mit Datenbank-Migrationen ein Backup machen (`php bin/console app:backup`,
+   docs/install/backup-restore.md). Migrationen laufen beim Start automatisch.
+3. Auf dem Unraid: Docker-Tab → plmail → „Update“ (oder „Check for Updates“). Per SSH dasselbe:
+   `/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/update_container plmail`
+   – baut den Container aus der Vorlage neu. plMail ist dabei rund eine Minute weg.
+   **Nur nach Absprache mit dem Nutzer.**
+4. Danach prüfen: Container `healthy`, `docker logs plmail` ohne `CRITICAL`, Anmeldung, ein Sync.
+5. Zurück: in der Vorlage statt `:main` den vorherigen Stand `:sha-<commit>` eintragen und „Apply“.
+
+### Live debuggen
+
+Zugriff per SSH auf den Unraid (Details in `CLAUDE.local.md`). Grundsatz: **erst lesen, dann
+fragen, dann ändern.** Die Installation enthält echte Mail von echten Menschen.
+
+- **Logs:** `docker logs plmail --since 30m` (stderr, JSON); dauerhaft in der Tabelle `log_entry`
+  (auch Admin → Protokolle). Deprecation-Zeilen ignorieren.
+- **Datenbank:** `docker exec plmail-db psql -U app -d app -At -c "select …"` – nur `select`,
+  ändern nur nach Rückfrage und in einer Transaktion.
+- **Konsole:** `docker exec plmail php bin/console list app`, z. B. `app:imap:test -a <id>`,
+  `app:mail:sync <id>`, `messenger:failed:show --transport=failed`.
+- **Warteschlangen:** Tabelle `messenger_messages` (Spalte `queue_name`); Worker-Neustarts stehen
+  als `app:work: … exited` im Log.
+- **Hypothesen prüfen:** Ein kleines PHP-Skript nach `/tmp` im Container kopieren und dort mit
+  `php` ausführen; es kann den Symfony-Kernel booten und Services des kompilierten Containers
+  benutzen (rein lesend, danach löschen).
+- **Einen Fix vorab ausprobieren:** Die geänderte Datei read-only über das Original mounten
+  (Vorlage → „Add another Path“), Container neu erstellen – `opcache.validate_timestamps` ist aus,
+  ohne Neustart greift nichts. Nur nach Absprache, und danach als PR sauber in den Fork, Mount wieder
+  raus. Nie Code direkt im laufenden Container ändern.
+- **Nicht** gegen die Produktions-Postfächer experimentieren (keine Test-Mails, kein Verschieben
+  oder Löschen auf dem Server). Für Versuche den Dev-Stack bzw. Test-Stack nehmen.
