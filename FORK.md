@@ -98,6 +98,30 @@ Zwei Funde aus einer Sicherheitsprüfung (2026-11-01), beide nicht im Original b
 
 **Kandidat fürs Original:** ja, beide (dort erst Issue, nur nach Freigabe).
 
+### 8. Absenderprüfung bei iCloud-Konten
+
+`src/Service/Mail/SenderAuthentication.php`: `KNOWN_RECEIVERS` bekommt `'me.com' => 'icloud.com'`;
+`verdict()` liest die Authentication-Results-Zeilen neu (neue Methoden `isOneReport()`,
+`reportPasses()`, `results()`). Test: neue Fälle `icloud: …` in
+`tests/Service/Mail/SenderAuthenticationTest.php`.
+
+- Zeilen ohne dmarc/dkim/spf-Ergebnis (iCloud schreibt BIMI und ARC je in eine eigene Zeile) sind
+  neutral statt ein Fehlschlag; bleibt nichts übrig → `Unknown`.
+- Berichten die geglaubten Zeilen DMARC höchstens einmal, werden sie als *ein* Bericht gelesen wie
+  Gmails eine Zeile. Ein DMARC-Ergebnis außer `pass`/`none` ist dann `Fail`, auch wenn eine andere
+  Zeile ein ausgerichtetes DKIM/SPF-pass hat. Berichten zwei Zeilen DMARC, gilt weiter die Regel
+  des Originals (jede Zeile muss bestehen).
+
+**Grund:** Auf `imap.mail.me.com` war jede Mail `Unknown` (Hostdomain `me.com`, Authserv-IDs
+`*.icloud.com`), mit bloßer Zuordnung `Fail` (BIMI/ARC-Zeilen bestehen nie). Buchungen echter
+Absender wurden so nie direkt in den Kalender geschrieben. Die Regel „jede Zeile muss bestehen“
+pro Methodenzeile hätte nicht gereicht: iCloud schreibt eine `dkim-verifier`-Zeile pro Signatur, im
+iCloud-Konto der Produktion bei 4149 von 13068 Mails mehrere (Absender + Versanddienst), die nicht
+ausgerichtete wäre jedes Mal `Fail` gewesen. `dmarc.icloud.com` und `spf.icloud.com` kamen dort in
+keiner Mail doppelt vor – passt zu RFC 8601 §5 (iCloud entfernt eingehende Zeilen mit seinen IDs),
+ist aber kein Beweis; belegt hat Apple das nirgends.
+**Kandidat fürs Original:** ja (dort erst Issue, nur nach Freigabe).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,
