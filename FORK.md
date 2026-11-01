@@ -74,9 +74,10 @@ In den Actions-Einstellungen des Forks deaktiviert: `pages.yml`, `wiki.yml`,
 (Website, Wiki, Meilensteine, Pflicht-Issue je PR) und würden im Fork nur fehlschlagen oder PRs
 blockieren. Aktiv bleiben `docker.yml` (Image) und `e2e.yml` (Unit- und Browsertests bei jedem PR).
 
-### 6. Anleitungen für Claude
+### 6. Anleitungen für KI-Assistenten
 
-`CLAUDE.md` (dieser Fork) und der Eintrag `CLAUDE.local.md` in `.gitignore`.
+`CLAUDE.md` (Regeln, Arbeitsweise, Betrieb, Debuggen), `AGENTS.md` (Verweis darauf für Codex,
+Cursor, Gemini CLI u. a.) und der Eintrag `CLAUDE.local.md` in `.gitignore`.
 
 ## Update vom Original
 
