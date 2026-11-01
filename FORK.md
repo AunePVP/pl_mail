@@ -78,6 +78,25 @@ blockieren. Aktiv bleiben `docker.yml` (Image) und `e2e.yml` (Unit- und Browsert
 
 `CLAUDE.md` (dieser Fork) und der Eintrag `CLAUDE.local.md` in `.gitignore`.
 
+### 7. Sicherheit: Antwort auf verschlüsselte Mail, Prelogin
+
+Zwei Funde aus einer Sicherheitsprüfung (2026-11-01), beide nicht im Original behoben.
+
+- `assets/controllers/compose/encryption_controller.js`, `#clean()`: `ALLOW_DATA_ATTR: false`,
+  dazu `data-quote-wrapped` in `ADD_ATTR`. Beim Antworten auf eine PGP-verschlüsselte Mail wird
+  das entschlüsselte HTML in den Editor eingefügt, also in die App-Seite selbst, nicht in den
+  Sandbox-Frame. DOMPurify lässt standardmäßig alle `data-*` stehen; ein Absender konnte so ein
+  `data-controller="mail--thread-read"` mit beliebiger URL einschleusen, das Stimulus startet und
+  das sofort mit dem CSRF-Token der Sitzung einen POST schickt (Threads in den Papierkorb, als Spam
+  markieren, …). Keine Skriptausführung, kein Datenabfluss (CSP), aber Aktionen im Namen des Opfers.
+- `src/Controller/Auth/PreloginController.php`: Ist die Adresse nicht genau so gespeichert, wird
+  ohne Beachtung der Groß-/Kleinschreibung gesucht (nur bei genau einem Treffer). Vorher bekam eine
+  bekannte Adresse in anderer Schreibweise das Ersatz-Salt, die exakte Schreibweise das echte; bei
+  unbekannten Adressen sind beide gleich. Zwei Anfragen verrieten so, ob es ein Konto gibt.
+  Test: `tests/Security/ForkPreloginCaseTest.php`.
+
+**Kandidat fürs Original:** ja, beide (dort erst Issue, nur nach Freigabe).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,

@@ -787,7 +787,13 @@ export default class extends Controller {
 
         return DOMPurify(window).sanitize(html, {
             FORBID_TAGS: ["style", "script", "iframe", "frame", "object", "embed", "form", "input", "button", "base", "meta", "link"],
-            ADD_ATTR: ["data-quoted", "data-pl-signature", "data-quote-sealed", "data-pl-var", "data-pl-signature-pinned", "target"],
+            // FORK (FORK.md): no data-* beyond the editor's own markers. The
+            // editor is the app's own page, and DOMPurify keeps every data-*
+            // by default — so a sender's decrypted HTML could carry a
+            // `data-controller` that Stimulus starts here, with the session's
+            // CSRF token at hand (e.g. mail--thread-read POSTing on connect).
+            ALLOW_DATA_ATTR: false,
+            ADD_ATTR: ["data-quoted", "data-pl-signature", "data-quote-sealed", "data-pl-var", "data-pl-signature-pinned", "data-quote-wrapped", "target"],
         });
     }
 
