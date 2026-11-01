@@ -91,7 +91,8 @@ git merge vX.Y.Z
    Abweichung selbst gelöst, die Fork-Stelle entfernen und hier austragen.
 2. `git diff vX.Y.Z -- $(git grep -l "FORK (FORK.md)")` ansehen: Sind alle Abweichungen noch da und
    passen sie zum neuen Code drumherum?
-3. Push, Pull Request gegen `main` des Forks, Tests (e2e.yml) abwarten, mergen. Der Merge baut
-   das Image.
+3. Push, Pull Request gegen `main` des Forks, Tests (e2e.yml) abwarten, dann **mit Merge-Commit**
+   mergen (`gh pr merge --merge`), nie per Squash: sonst erkennt Git die Commits des Originals beim
+   nächsten Update nicht wieder. Der Merge baut das Image.
 4. Auf dem Server das neue Image ziehen. Migrationen laufen beim Start automatisch; vorher ein
    Datenbank-Backup machen (docs/install/backup-restore.md).

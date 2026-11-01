@@ -52,8 +52,11 @@ etwas so ist und welcher Fehler damit schon einmal behoben wurde. Lies sie, bevo
 - Jede Änderung auf einem eigenen Branch (`feature/…`, `fix/…`, `update/vX.Y.Z`), dann Pull
   Request gegen `main` **des Forks** (`gh pr create --repo AunePVP/pl_mail --base main`).
   `gh` wählt bei Forks sonst gern das Original als Ziel.
-- Der PR startet `e2e.yml` (PHPUnit und Playwright). Erst mergen, wenn es grün ist; gemergt wird
-  per Squash.
+- Der PR startet `e2e.yml` (PHPUnit und Playwright). Erst mergen, wenn es grün ist.
+- **Eigene Änderungen per Squash mergen, Updates vom Original (`update/vX.Y.Z`) nie:** die mit
+  einem normalen Merge-Commit (`gh pr merge --merge`). Ein Squash würde die Commits des Originals
+  zu einem neuen Commit zusammenfassen; Git wüsste dann nicht mehr, dass sie schon drin sind, und
+  das nächste Update brächte dieselben Konflikte noch einmal.
 - Was ein Nutzer merkt, bekommt einen Eintrag in `changelog.d/` wie im Original beschrieben
   (changelog.d/README.md), mit Präfix `fork-` im Dateinamen.
 - Update vom Original: siehe FORK.md → „Update vom Original“.
