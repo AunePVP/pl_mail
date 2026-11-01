@@ -15,5 +15,6 @@ Das Wichtigste in Kürze:
 - **Nie direkt auf `main`.** Eigener Branch, Pull Request gegen `main` **des Forks**
   (`AunePVP/pl_mail`), Tests abwarten. Jeder Merge auf `main` baut das Produktions-Image.
 - Fork-Änderungen klein halten, mit `FORK (FORK.md)` im Code markieren und in FORK.md eintragen.
-- Nichts beim Original (karatektus/pl_mail) einreichen, ohne dass der Nutzer es freigibt.
+- Nichts zum Original (karatektus/pl_mail) schicken – kein Push, PR, Issue oder Kommentar –,
+  außer der Nutzer sagt es im jeweiligen Fall ausdrücklich.
 - An der laufenden Installation: erst lesen, dann fragen, dann ändern. Neustarts nur nach Absprache.
