@@ -3,3 +3,8 @@ admin:
         field:
             reasoning: 'Let the writing model reason'
             reasoning_help: 'Off asks the model to answer straight away instead of thinking first: quicker replies, sorting and summaries, usually a little less careful. Sent as think: false to Ollama and as chat_template_kwargs.enable_thinking: false to an OpenAI-compatible server (vLLM, SGLang, llama.cpp). A hosted API that does not know the field may refuse the request.'
+message:
+    fork_unsubscribe:
+        label: "Unsubscribe"
+        hint_link: "Opens the sender's unsubscribe page in a new tab"
+        hint_mail: "Opens a message to the sender's unsubscribe address"

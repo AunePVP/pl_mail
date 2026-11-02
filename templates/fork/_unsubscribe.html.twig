@@ -1,0 +1,45 @@
+{#
+fork/_unsubscribe.html.twig
+─────────────────────────────────────────────────────────────────────────────
+FORK (FORK.md): the Unsubscribe button, drawn from the List-Unsubscribe
+header so the reader never has to hunt the footer for it. Nothing at all
+for mail without the header, and none in spam or the bin (see
+App\Twig\Fork\ForkUnsubscribeExtension).
+
+A web link opens in a new tab, where the sender's own page asks for the
+confirmation: plMail sends nothing anywhere on its own. A mailto: opens a
+draft to that address in the dock.
+
+Variables:
+  message  Message
+  variant  'chip' (message header, beside the date) | 'menu' (the ⋮ menu)
+#}
+{% set target = fork_unsubscribe(message) %}
+{% if target is not null %}
+    {% set label = 'message.fork_unsubscribe.label'|trans({}, 'fork') %}
+    {% set hint  = (target.url is defined ? 'message.fork_unsubscribe.hint_link' : 'message.fork_unsubscribe.hint_mail')|trans({}, 'fork') %}
+    {% set attrs = target.url is defined
+        ? { href: target.url, target: '_blank', rel: 'noopener noreferrer nofollow', 'data-turbo': 'false' }
+        : { href: path('app_compose_new', { to: target.to }), 'data-turbo-frame': 'compose_dock', 'data-controller': 'compose--frame-target', 'data-turbo-prefetch': 'false' } %}
+
+    {% if variant == 'menu' %}
+        <a {% for name, value in attrs %}{{ name }}="{{ value }}" {% endfor %}
+           data-action="click->mail--message-actions#dismiss"
+           title="{{ hint }}"
+           data-fork-unsubscribe
+           class="flex items-center gap-2 px-4 py-2 text-ink-soft hover:bg-hover transition-colors">
+            <i class="fa-solid fa-bell-slash w-4 text-ink-faint" aria-hidden="true"></i>
+            {{ label }}
+        </a>
+    {% else %}
+        <a {% for name, value in attrs %}{{ name }}="{{ value }}" {% endfor %}
+           title="{{ hint }}"
+           data-fork-unsubscribe
+           class="inline-flex items-center gap-1 h-6 px-2 rounded-full border border-line
+                  text-xs text-ink-muted hover:text-ink hover:bg-hover whitespace-nowrap
+                  transition-colors duration-100">
+            <i class="fa-solid fa-bell-slash text-[11px]" aria-hidden="true"></i>
+            {{ label }}
+        </a>
+    {% endif %}
+{% endif %}

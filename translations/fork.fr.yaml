@@ -3,3 +3,8 @@ admin:
         field:
             reasoning: 'Laisser le modèle d’écriture réfléchir'
             reasoning_help: 'Désactivé, le modèle répond tout de suite au lieu de réfléchir d’abord : réponses, tri et résumés plus rapides, en général un peu moins soignés. Envoyé à Ollama comme think: false et à un serveur compatible OpenAI (vLLM, SGLang, llama.cpp) comme chat_template_kwargs.enable_thinking: false. Une API hébergée qui ne connaît pas ce champ peut refuser la requête.'
+message:
+    fork_unsubscribe:
+        label: "Se désabonner"
+        hint_link: "Ouvre la page de désabonnement de l'expéditeur dans un nouvel onglet"
+        hint_mail: "Ouvre un message vers l'adresse de désabonnement de l'expéditeur"
