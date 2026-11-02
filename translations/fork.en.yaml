@@ -1,0 +1,5 @@
+admin:
+    ai:
+        field:
+            reasoning: 'Let the writing model reason'
+            reasoning_help: 'Off asks the model to answer straight away instead of thinking first: quicker replies, sorting and summaries, usually a little less careful. Sent as think: false to Ollama and as chat_template_kwargs.enable_thinking: false to an OpenAI-compatible server (vLLM, SGLang, llama.cpp). A hosted API that does not know the field may refuse the request.'
