@@ -11,6 +11,7 @@ use App\Entity\Mail\Message;
 use App\Entity\Mail\MessageThread;
 use App\Service\Calendar\Extraction\IcsEventExtractor;
 use App\Service\Calendar\Extraction\StructuredDataEventExtractor;
+use App\Service\Fork\Calendar\ForkLlmTravelExtractor;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -27,7 +28,12 @@ class EventSourceLinkRepository extends ServiceEntityRepository
      * or it tried to change an event and was held (InviteReader decides which)
      * — but it has to be FOUND to be decided about, so both are read here.
      */
-    private const array CARD_EXTRACTORS = [IcsEventExtractor::NAME, StructuredDataEventExtractor::NAME];
+    private const array CARD_EXTRACTORS = [
+        IcsEventExtractor::NAME,
+        StructuredDataEventExtractor::NAME,
+        // FORK (FORK.md): the chat model's trips are only ever offered, so the card is their only way in.
+        ForkLlmTravelExtractor::NAME,
+    ];
 
     public function __construct(ManagerRegistry $registry)
     {

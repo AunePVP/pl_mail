@@ -15,6 +15,11 @@ use App\Entity\Mail\Message;
 use App\Entity\User\User;
 use App\Service\Calendar\CalendarProvisioner;
 use App\Service\Calendar\EventReconciler;
+use App\Service\Calendar\InviteReader;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Session\Session;
+use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
+use Twig\Environment;
 use App\Service\Calendar\Extraction\EventExtractionRunner;
 use App\Service\Calendar\Extraction\ExtractedEvent;
 use DateTimeImmutable;
@@ -186,6 +191,36 @@ final class ForkLlmTravelExtractorTest extends KernelTestCase
         self::assertCount(1, $touched);
         self::assertSame(ParticipationStatus::NeedsAction, $touched[0]->myParticipation);
         self::assertSame(EventSource::Llm, $touched[0]->source);
+    }
+
+    /**
+     * And the offer reaches the reader: the card above the mail asks whether
+     * to add it. Without this the guess existed and nobody could ever see it.
+     */
+    public function testTheOfferIsOnTheCardAboveTheMail(): void
+    {
+        $this->answer = '{"items":[' . self::FLIGHT . ']}';
+        $message      = $this->message(self::TRIP);
+        $this->em->persist($message);
+        $this->em->flush();
+
+        $container = self::getContainer();
+        $container->get(EventReconciler::class)->reconcile($message, $this->extract($message));
+        $this->em->flush();
+
+        $request = new Request();
+        $request->setSession(new Session(new MockArraySessionStorage()));
+        $container->get('request_stack')->push($request);
+
+        $invite = $container->get(InviteReader::class)->forMessage($message, $this->account->usr);
+
+        self::assertNotNull($invite);
+        self::assertTrue($invite->isOffer);
+
+        $html = $container->get(Environment::class)->render('calendar/_invite_card.html.twig', ['invite' => $invite]);
+
+        self::assertStringContainsString('XY 4321 VIE → CGN', $html);
+        self::assertStringContainsString('action="/calendar/invite/' . $message->id . '/respond"', $html);
     }
 
     /** "4321" from one mail and "XY4321" from the next are one flight. */

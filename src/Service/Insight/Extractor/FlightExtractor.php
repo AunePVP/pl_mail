@@ -11,6 +11,7 @@ use App\Service\Insight\InsightDraft;
 use App\Service\Insight\InsightExtractorInterface;
 use DateTimeImmutable;
 use DateTimeZone;
+use App\Service\User\UserTimezoneResolver;
 
 /**
  * Flights: designators, booking codes and routes read out of airline and
@@ -32,6 +33,12 @@ use DateTimeZone;
  */
 final readonly class FlightExtractor implements InsightExtractorInterface
 {
+    // FORK (FORK.md): the reader's zone, for the clock time a mail states.
+    public function __construct(
+        private ?UserTimezoneResolver $forkTimezones = null,
+    ) {
+    }
+
     /**
      * Airlines and the agents that book them — matched on the suffix so
      * booking@mail.lufthansa.com counts.
@@ -198,6 +205,13 @@ final readonly class FlightExtractor implements InsightExtractorInterface
                     ? $date['date']
                     : $date['date']->setTime($time['hour'], $time['minute']);
 
+                // FORK (FORK.md): "15:45" in a mail is the reader's clock, not
+                // UTC; read as UTC the card showed 16:45 in Berlin.
+                if (null !== $time && null !== $this->forkTimezones) {
+                    $happensAt = new DateTimeImmutable($happensAt->format('Y-m-d H:i:s'), $this->forkTimezones->resolve($message->account->usr))
+                        ->setTimezone(new DateTimeZone('UTC'));
+                }
+
                 $departsAtText = null === $time ? $date['raw'] : $date['raw'] . ' ' . $time['raw'];
             }
 
@@ -214,7 +228,8 @@ final readonly class FlightExtractor implements InsightExtractorInterface
                 // and Tuesday's flight is not Wednesday's. Undated mails about
                 // the same designator collapse onto one card, which is the
                 // best that can be done without a date to tell them apart.
-                dedupeKey: $leg['number'] . (null === $happensAt ? '' : '@' . $happensAt->format('Y-m-d')),
+                // FORK (FORK.md): the stated day, as before the zone moved the instant.
+                dedupeKey: $leg['number'] . (null === $happensAt ? '' : '@' . $date['date']->format('Y-m-d')),
                 payload: [
                     'flightNumber'  => $leg['number'],
                     'pnr'           => $pnr,
