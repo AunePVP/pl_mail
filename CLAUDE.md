@@ -56,7 +56,9 @@ etwas so ist und welcher Fehler damit schon einmal behoben wurde. Lies sie, bevo
 - Jede Änderung auf einem eigenen Branch (`feature/…`, `fix/…`, `update/vX.Y.Z`), dann Pull
   Request gegen `main` **des Forks** (`gh pr create --repo AunePVP/pl_mail --base main`).
   `gh` wählt bei Forks sonst gern das Original als Ziel.
-- Der PR startet `e2e.yml` (PHPUnit und Playwright). Erst mergen, wenn es grün ist.
+- Die CI testet PRs nicht (`e2e.yml` ist abgeschaltet, FORK.md → Abweichung 5). Vor dem Merge
+  lokal PHPUnit und PHPStan laufen lassen (siehe unten), bei Änderungen an der Oberfläche auch die
+  betroffenen Playwright-Specs. Erst mergen, wenn das grün ist.
 - **Eigene Änderungen per Squash mergen, Updates vom Original (`update/vX.Y.Z`) nie:** die mit
   einem normalen Merge-Commit (`gh pr merge --merge`). Ein Squash würde die Commits des Originals
   zu einem neuen Commit zusammenfassen; Git wüsste dann nicht mehr, dass sie schon drin sind, und
@@ -74,6 +76,8 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build   # Dev-Stack
 npm ci && npx playwright install chromium
 npm run test:unit:docker                                         # PHPUnit
 npm run test:e2e:docker                                          # Browsertests
+docker compose -f compose.test.yaml run --rm --no-deps --entrypoint docker-php-entrypoint app \
+  php -d memory_limit=6G vendor/bin/phpstan analyse --no-progress # PHPStan
 ```
 
 Der Test-Stack belegt Port 8001 (`TEST_HTTP_PORT`). Auf einem Rechner, auf dem 8001 schon belegt
