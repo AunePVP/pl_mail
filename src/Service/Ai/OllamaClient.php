@@ -13,6 +13,8 @@ use App\Domain\DTO\Ai\AiProbe;
 use App\Domain\DTO\Ai\AiWarmUp;
 use App\Domain\DTO\Ai\LoadedModel;
 use App\Domain\DTO\Ai\OllamaModel;
+use App\Domain\Enum\Ai\AiProvider;
+use App\Service\Fork\ForkReasoning;
 use DateTimeImmutable;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\Exception\DecodingExceptionInterface;
@@ -125,6 +127,9 @@ final readonly class OllamaClient
     public function __construct(
         private HttpClientInterface $http,
         private LoggerInterface     $logger,
+        // FORK (FORK.md): the reasoning switch. Optional so the client still
+        // builds without it, as every test of it does.
+        private ?ForkReasoning      $forkReasoning = null,
     ) {
     }
 
@@ -160,6 +165,7 @@ final readonly class OllamaClient
         return new self(
             $this->http->withOptions(['headers' => $headers, 'max_redirects' => 0]),
             $this->logger,
+            $this->forkReasoning, // FORK (FORK.md)
         );
     }
 
@@ -394,6 +400,9 @@ final readonly class OllamaClient
             'stream'   => false,
         ], $keepAlive);
 
+        // FORK (FORK.md): nothing while reasoning is on, `think: false` when it is not.
+        $payload = [...$payload, ...($this->forkReasoning?->fieldsFor(AiProvider::Ollama) ?? [])];
+
         if (null !== $temperature) {
             $payload['options'] = ['temperature' => $temperature];
         }
@@ -512,6 +521,9 @@ final readonly class OllamaClient
             'messages' => $this->cleanMessages($messages, $model),
             'stream'   => true,
         ], $keepAlive);
+
+        // FORK (FORK.md): nothing while reasoning is on, `think: false` when it is not.
+        $payload = [...$payload, ...($this->forkReasoning?->fieldsFor(AiProvider::Ollama) ?? [])];
 
         $options = [];
 

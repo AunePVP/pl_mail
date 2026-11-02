@@ -127,6 +127,40 @@ keiner Mail doppelt vor – passt zu RFC 8601 §5 (iCloud entfernt eingehende Ze
 ist aber kein Beweis; belegt hat Apple das nirgends.
 **Kandidat fürs Original:** ja (dort erst Issue, nur nach Freigabe).
 
+### 9. Reasoning des Schreib-Modells abschaltbar
+
+Admin → KI → Sprachmodell, Schalter „Schreib-Modell darf nachdenken (Reasoning)“ direkt unter dem
+Schreib-Modell, Standard an. Aus schickt bei jeder Chat-Anfrage zusätzlich:
+
+- OpenAI-kompatibel (vLLM, SGLang, llama.cpp): `chat_template_kwargs: {"enable_thinking": false}`
+- Ollama: `think: false`
+
+An = keine zusätzlichen Felder, Anfragen wie im Original. Embeddings und Test-Button sind nicht betroffen.
+
+Neue Dateien: `src/Entity/Fork/ForkAiOptions.php`, `src/Repository/Fork/ForkAiOptionsRepository.php`,
+`src/Service/Fork/ForkReasoning.php`, `src/Form/Fork/ForkReasoningExtension.php` (Form-Type-Extension
+für `AiSettingsType`, nur bei `advanced: true`, also nicht im Einrichtungsassistenten; speichert nur
+auf der Route `app_admin_ai_settings`), `translations/fork.*.yaml` (eigene Domain `fork`),
+`migrations/Version20261102120000.php`, Tests `tests/Service/Fork/ForkReasoningTest.php` und
+`tests/Controller/Admin/ForkReasoningSwitchTest.php`.
+
+Änderungen an Dateien des Originals (alle mit `FORK (FORK.md)` markiert):
+
+- `src/Service/Ai/OpenAiClient.php`: optionaler Konstruktorparameter `?ForkReasoning`, `payload()`
+  hängt dessen Felder an.
+- `src/Service/Ai/OllamaClient.php`: dasselbe in `chat()` und `chatStream()`, `authorised()` reicht
+  den Parameter weiter.
+- `templates/admin/ai/_frame.html.twig`: eine Zeile `form_row(form.forkReasoningEnabled)`.
+
+**Datenbank:** eigene Tabelle `fork_ai_options` (eine Zeile, Spalte `reasoning_enabled`), keine
+Spalte in `ai_settings`. Gelesen wird pro Anfrage als Skalar, damit lange laufende Worker eine
+Änderung sofort sehen. Nicht im Konfigurations-Backup (`app:backup` sichert sie als Teil der
+Datenbank, der Konfig-Export des Originals kennt sie nicht).
+
+**Grund:** Qwen auf vLLM denkt standardmäßig vor jeder Antwort; für Einsortieren und kurze Entwürfe
+kostet das viel Zeit und bringt wenig.
+**Kandidat fürs Original:** ja, dort als Feld in `ai_settings` (dort erst Issue, nur nach Freigabe).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,

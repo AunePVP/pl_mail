@@ -196,6 +196,8 @@ poll would empty a field mid-word.
                         </details>
 
                         {{ form_row(form.chatModel) }}
+                        {# FORK (FORK.md): the reasoning switch, from ForkReasoningExtension. #}
+                        {{ form_row(form.forkReasoningEnabled) }}
 
                         {# ── What only Ollama can be asked ────────────────
                            How long the model is held, and loading it ahead of

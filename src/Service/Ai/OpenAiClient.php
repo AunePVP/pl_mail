@@ -10,6 +10,8 @@ use App\Domain\DTO\Ai\AiConnection;
 use App\Domain\DTO\Ai\AiEmbedResult;
 use App\Domain\DTO\Ai\AiProbe;
 use App\Domain\DTO\Ai\OllamaModel;
+use App\Domain\Enum\Ai\AiProvider;
+use App\Service\Fork\ForkReasoning;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\Exception\DecodingExceptionInterface;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpClientException;
@@ -70,6 +72,9 @@ final readonly class OpenAiClient
     public function __construct(
         private HttpClientInterface $http,
         private LoggerInterface     $logger,
+        // FORK (FORK.md): the reasoning switch. Optional so the client still
+        // builds without it, as every test here does.
+        private ?ForkReasoning      $forkReasoning = null,
     ) {
     }
 
@@ -494,7 +499,8 @@ final readonly class OpenAiClient
             $payload['temperature'] = $temperature;
         }
 
-        return $payload;
+        // FORK (FORK.md): nothing while reasoning is on, the switch-off field when it is not.
+        return [...$payload, ...($this->forkReasoning?->fieldsFor(AiProvider::OpenAi) ?? [])];
     }
 
     /**

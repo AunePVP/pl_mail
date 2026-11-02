@@ -1,0 +1,5 @@
+admin:
+    ai:
+        field:
+            reasoning: 'Schreib-Modell darf nachdenken (Reasoning)'
+            reasoning_help: 'Aus heißt: Das Modell antwortet sofort, statt erst nachzudenken. Antworten, Einsortieren und Zusammenfassungen gehen schneller, sind aber meist etwas weniger sorgfältig. Geht an Ollama als think: false, an einen OpenAI-kompatiblen Server (vLLM, SGLang, llama.cpp) als chat_template_kwargs.enable_thinking: false. Eine gehostete API, die das Feld nicht kennt, lehnt die Anfrage womöglich ab.'
