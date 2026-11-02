@@ -74,7 +74,7 @@ final class ForkReasoningExtension extends AbstractTypeExtension
                 return;
             }
 
-            $row                   = $this->options->currentOrNew();
+            $row                   = $this->options->forWrite();
             $row->reasoningEnabled = true === $form->get(self::FIELD)->getData();
 
             $this->entityManager->persist($row);

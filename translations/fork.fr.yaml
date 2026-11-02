@@ -3,6 +3,11 @@ admin:
         field:
             reasoning: 'Laisser le modèle d’écriture réfléchir'
             reasoning_help: 'Désactivé, le modèle répond tout de suite au lieu de réfléchir d’abord : réponses, tri et résumés plus rapides, en général un peu moins soignés. Envoyé à Ollama comme think: false et à un serveur compatible OpenAI (vLLM, SGLang, llama.cpp) comme chat_template_kwargs.enable_thinking: false. Une API hébergée qui ne connaît pas ce champ peut refuser la requête.'
+            rerank_url: "Reclasseur de la recherche (adresse)"
+            rerank_url_help: "Adresse complète d'un point /rerank (format Cohere/Jina, p. ex. Qwen3-Reranker). Classe les résultats de « Meilleurs résultats » et « En bref » selon leur pertinence ; la liste des résultats reste inchangée. Vide : FORK_RERANK_URL s'applique, sinon aucun reclasseur. « Tester » envoie un petit essai."
+        fork_rerank:
+            ok: "Le reclasseur a répondu en %ms% ms (pertinent %match%, non pertinent %miss%)."
+            failed: "Le reclasseur n'a pas répondu comme prévu : %error%"
 message:
     fork_unsubscribe:
         label: "Se désabonner"

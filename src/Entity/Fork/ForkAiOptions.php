@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Entity\Fork;
 
 use App\Repository\Fork\ForkAiOptionsRepository;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
@@ -37,4 +38,11 @@ class ForkAiOptions
      */
     #[ORM\Column(name: 'reasoning_enabled', options: ['default' => true])]
     public bool $reasoningEnabled = true;
+
+    /**
+     * The full address of the search reranker's /rerank endpoint, or null for
+     * none set here — then FORK_RERANK_URL decides (ForkReranker::url()).
+     */
+    #[ORM\Column(name: 'rerank_url', type: Types::TEXT, nullable: true)]
+    public ?string $rerankUrl = null;
 }

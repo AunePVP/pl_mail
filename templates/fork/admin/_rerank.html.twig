@@ -1,0 +1,26 @@
+{#
+    FORK (FORK.md): the search reranker's address, and what the Test button
+    found there. See ForkRerankExtension.
+#}
+{% if form.forkRerankUrl is defined %}
+    {{ form_row(form.forkRerankUrl) }}
+
+    {% set probe = app.request.attributes.get('_fork_rerank_probe') %}
+    {% if probe is not null %}
+        {% if probe.ok %}
+            <div role="status" class="flex items-start gap-2.5 rounded-lg bg-emerald-500/10 px-3.5 py-3 text-sm text-emerald-500" data-fork-rerank-probe="ok">
+                <i class="fa-solid fa-plug-circle-check mt-0.5 shrink-0" aria-hidden="true"></i>
+                <p class="leading-snug">
+                    {{ 'admin.ai.fork_rerank.ok'|trans({ '%ms%': probe.ms, '%match%': probe.match|number_format(2), '%miss%': probe.miss|number_format(2) }, 'fork') }}
+                </p>
+            </div>
+        {% else %}
+            <div role="alert" class="flex items-start gap-2.5 rounded-lg alert-danger px-3.5 py-3 text-sm text-danger" data-fork-rerank-probe="failed">
+                <i class="fa-solid fa-plug-circle-xmark mt-0.5 shrink-0" aria-hidden="true"></i>
+                <p class="leading-snug break-words">
+                    {{ 'admin.ai.fork_rerank.failed'|trans({ '%error%': probe.error }, 'fork') }}
+                </p>
+            </div>
+        {% endif %}
+    {% endif %}
+{% endif %}

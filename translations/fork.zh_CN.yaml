@@ -3,6 +3,11 @@ admin:
         field:
             reasoning: '允许写作模型推理'
             reasoning_help: '关闭后，模型会直接回答而不先思考：回复、分类和摘要更快，但通常稍欠严谨。对 Ollama 发送 think: false，对 OpenAI 兼容服务器（vLLM、SGLang、llama.cpp）发送 chat_template_kwargs.enable_thinking: false。不认识该字段的托管 API 可能会拒绝请求。'
+            rerank_url: "搜索重排序器（地址）"
+            rerank_url_help: "/rerank 端点的完整地址（Cohere/Jina 格式，例如 Qwen3-Reranker）。按与搜索的匹配程度为“最佳匹配”和“简要”排序；结果列表本身不变。留空：使用 FORK_RERANK_URL，否则不使用重排序器。“测试”会发送一个小探测。"
+        fork_rerank:
+            ok: "重排序器在 %ms% 毫秒内应答（匹配 %match%，不匹配 %miss%）。"
+            failed: "重排序器的应答不符合预期：%error%"
 message:
     fork_unsubscribe:
         label: "退订"

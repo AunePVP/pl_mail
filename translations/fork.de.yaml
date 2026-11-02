@@ -3,6 +3,11 @@ admin:
         field:
             reasoning: 'Schreib-Modell darf nachdenken (Reasoning)'
             reasoning_help: 'Aus heißt: Das Modell antwortet sofort, statt erst nachzudenken. Antworten, Einsortieren und Zusammenfassungen gehen schneller, sind aber meist etwas weniger sorgfältig. Geht an Ollama als think: false, an einen OpenAI-kompatiblen Server (vLLM, SGLang, llama.cpp) als chat_template_kwargs.enable_thinking: false. Eine gehostete API, die das Feld nicht kennt, lehnt die Anfrage womöglich ab.'
+            rerank_url: "Reranker für die Suche (Adresse)"
+            rerank_url_help: "Volle Adresse eines /rerank-Endpunkts (Cohere/Jina-Format, z. B. Qwen3-Reranker). Ordnet die Treffer für „Beste Treffer“ und „Kurz gesagt“ danach, wie gut sie zur Suche passen; die Trefferliste selbst bleibt, wie sie ist. Leer: dann gilt FORK_RERANK_URL, sonst kein Reranker. „Testen“ schickt eine kleine Probe."
+        fork_rerank:
+            ok: "Reranker antwortet in %ms% ms (Treffer %match%, Nicht-Treffer %miss%)."
+            failed: "Reranker antwortet nicht wie erwartet: %error%"
 message:
     fork_unsubscribe:
         label: "Abmelden"

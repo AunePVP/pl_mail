@@ -3,6 +3,11 @@ admin:
         field:
             reasoning: "Let the writin' model ponder"
             reasoning_help: "Off bids the model answer straight off 'stead o' ponderin' first: quicker replies, sortin' an' summaries, mostly a touch less careful. Sent as think: false to Ollama an' as chat_template_kwargs.enable_thinking: false to an OpenAI-compatible server (vLLM, SGLang, llama.cpp). A hosted API that knows not the field may turn the request away."
+            rerank_url: "Search reranker (port o' call)"
+            rerank_url_help: "Full address o' a /rerank endpoint (Cohere/Jina shape, e.g. Qwen3-Reranker). Orders the finds fer \"Best matches\" an' \"In short\" by how well they fit the search; the list itself stays as 'tis. Empty: FORK_RERANK_URL holds, else no reranker. \"Test\" sends a wee probe."
+        fork_rerank:
+            ok: "Reranker hailed back in %ms% ms (match %match%, miss %miss%)."
+            failed: "The reranker didn't answer as it ought: %error%"
 message:
     fork_unsubscribe:
         label: "Abandon ship"
