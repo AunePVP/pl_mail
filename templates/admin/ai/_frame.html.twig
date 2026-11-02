@@ -354,6 +354,8 @@ poll would empty a field mid-word.
                         </div>
 
                         {{ form_row(form.searchEnabled) }}
+                        {# FORK (FORK.md): the search reranker, from ForkRerankExtension. #}
+                        {% include 'fork/admin/_rerank.html.twig' %}
                         {{ form_row(form.categorisationEnabled) }}
 
                         {# The three that qualify the switch above, set in from

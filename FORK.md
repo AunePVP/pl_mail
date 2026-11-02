@@ -158,8 +158,8 @@ auf der Route `app_admin_ai_settings`), `translations/fork.*.yaml` (eigene Domai
   den Parameter weiter.
 - `templates/admin/ai/_frame.html.twig`: eine Zeile `form_row(form.forkReasoningEnabled)`.
 
-**Datenbank:** eigene Tabelle `fork_ai_options` (eine Zeile, Spalte `reasoning_enabled`), keine
-Spalte in `ai_settings`. Gelesen wird pro Anfrage als Skalar, damit lange laufende Worker eine
+**Datenbank:** eigene Tabelle `fork_ai_options` (eine Zeile, Spalte `reasoning_enabled`; seit
+Abweichung 18 auch `rerank_url`), keine Spalte in `ai_settings`. Gelesen wird pro Anfrage als Skalar, damit lange laufende Worker eine
 Änderung sofort sehen. Nicht im Konfigurations-Backup (`app:backup` sichert sie als Teil der
 Datenbank, der Konfig-Export des Originals kennt sie nicht).
 
@@ -409,13 +409,16 @@ statt Wort für Wort. Test: `tests/Domain/Helper/ForkMimeSplitCharacterTest.php`
 jede Hälfte als cp1252 „repariert“: „bestÃ¤tigt“.
 **Kandidat fürs Original:** ja, Fehlerbehebung (dort erst Issue, nur nach Freigabe).
 
-### 18. Reranker für die Suche (`FORK_RERANK_URL`)
+### 18. Reranker für die Suche (Admin → KI oder `FORK_RERANK_URL`)
 
+**Admin → KI**, Feld „Reranker für die Suche (Adresse)“ unter „Suche nach Bedeutung“, oder die
 Umgebungsvariable **`FORK_RERANK_URL`**: volle Adresse eines `/rerank`-Endpoints im Cohere/Jina-Format
 (POST `{query, documents, top_n, instruction}`, Antwort `{results: [{index, relevance_score}]}`), z. B.
-Qwen3-Reranker-0.6B. Leer oder nicht gesetzt = aus, alles wie in Abweichung 16. Gesetzt wird sie in
-der Unraid-Vorlage; die Adresse muss **aus dem plmail-Container** erreichbar sein (LAN-IP bzw.
-Docker-Gateway, nicht `*.local`). Timeout 4 s; jeder Fehler heißt „ohne Ranking“.
+Qwen3-Reranker-0.6B. Die Adresse auf der Seite gilt vor der Variable; ist beides leer, ist der
+Reranker aus und alles wie in Abweichung 16. Die Adresse muss **aus dem plmail-Container** erreichbar
+sein (LAN-IP bzw. Docker-Gateway, nicht `*.local`). Timeout 4 s; jeder Fehler heißt „ohne Ranking“.
+„Testen“ schickt der Adresse im Feld eine kleine Probe (ein Treffer, ein Nicht-Treffer) und zeigt
+Antwortzeit und Scores unter dem Feld, ohne zu speichern.
 
 - `ForkSearchCandidates` holt die ersten 50 Treffer der Suche (wie die Liste, als angemeldeter
   Nutzer), lässt sie vom Reranker bewerten (Absender, Datum, Betreff, markierter Ausschnitt) und
@@ -429,8 +432,19 @@ Neue Dateien: `src/Service/Fork/Search/ForkReranker.php`, `ForkSearchCandidates.
 `ForkCandidate.php`, `templates/fork/search/_best.html.twig`, Schlüssel
 `search.fork_insight.best_heading`, Test `tests/Controller/Fork/ForkSearchRerankTest.php`. Geändert
 (nur Fork-Dateien): `ForkSearchAnswer`, `ForkSearchInsightController`, `_insight.html.twig`.
+Für das Feld: `src/Form/Fork/ForkRerankExtension.php` (wie `ForkReasoningExtension`, Abweichung 9),
+`templates/fork/admin/_rerank.html.twig`, Schlüssel `admin.ai.field.rerank_url*` und
+`admin.ai.fork_rerank.*`, `migrations/Version20261102210000.php`, Test
+`tests/Controller/Admin/ForkRerankSettingTest.php`; `ForkAiOptionsRepository::forWrite()`, damit
+Reasoning-Schalter und Reranker beim ersten Speichern eine Zeile sind und nicht zwei.
 
-**Datenbank:** keine Änderung.
+Änderung an einer Datei des Originals (mit `FORK (FORK.md)` markiert):
+
+- `templates/admin/ai/_frame.html.twig`: ein `include` von `fork/admin/_rerank.html.twig` nach
+  `form.searchEnabled`.
+
+**Datenbank:** Spalte `rerank_url` (TEXT, NULL) in der Fork-Tabelle `fork_ai_options`
+(Abweichung 9), keine Änderung an Tabellen des Originals.
 
 **Grund:** Gemessen mit dem Reranker auf der Arc A380 (2026-11-02): 1,0 s für 50 Treffer zu „Flug“;
 erkennt Buchungsmails, achtet aber nicht aufs Datum (deshalb die Altersgewichtung).

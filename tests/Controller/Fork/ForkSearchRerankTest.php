@@ -180,7 +180,7 @@ final class ForkSearchRerankTest extends WebTestCase
     public function testWithoutTheVariableThereIsNoReranking(): void
     {
         $http     = new MockHttpClient(static fn (): MockResponse => throw new \LogicException('asked'));
-        $reranker = new ForkReranker($http, new NullLogger(), '');
+        $reranker = new ForkReranker($http, new NullLogger(), null, '');
 
         self::assertFalse($reranker->isAvailable());
         self::assertNull($reranker->rank('Flug', [1 => 'Flug']));

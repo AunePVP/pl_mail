@@ -28,6 +28,23 @@ final class ForkAiOptionsRepository extends ServiceEntityRepository
     }
 
     /**
+     * The row to write a submitted value onto. currentOrNew(), except that a
+     * row already persisted in this request and not yet flushed is that row:
+     * two fields of the admin form each making a new one would be two INSERTs
+     * against the singleton index.
+     */
+    public function forWrite(): ForkAiOptions
+    {
+        foreach ($this->getEntityManager()->getUnitOfWork()->getScheduledEntityInsertions() as $entity) {
+            if ($entity instanceof ForkAiOptions) {
+                return $entity;
+            }
+        }
+
+        return $this->currentOrNew();
+    }
+
+    /**
      * Read as a scalar, not as the entity: the workers live for hours, and an
      * entity already in their identity map would keep answering with whatever
      * it said when they started, long after an administrator changed it.
@@ -42,5 +59,18 @@ final class ForkAiOptionsRepository extends ServiceEntityRepository
             ->getOneOrNullResult(AbstractQuery::HYDRATE_SINGLE_SCALAR);
 
         return null === $value ? true : (bool) $value;
+    }
+
+    /** As reasoningEnabled(), and for the same reason: the address as it is now. */
+    public function rerankUrl(): ?string
+    {
+        $value = $this->createQueryBuilder('o')
+            ->select('o.rerankUrl')
+            ->orderBy('o.id', 'ASC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult(AbstractQuery::HYDRATE_SINGLE_SCALAR);
+
+        return true === is_string($value) && '' !== trim($value) ? trim($value) : null;
     }
 }

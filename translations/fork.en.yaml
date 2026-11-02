@@ -3,6 +3,11 @@ admin:
         field:
             reasoning: 'Let the writing model reason'
             reasoning_help: 'Off asks the model to answer straight away instead of thinking first: quicker replies, sorting and summaries, usually a little less careful. Sent as think: false to Ollama and as chat_template_kwargs.enable_thinking: false to an OpenAI-compatible server (vLLM, SGLang, llama.cpp). A hosted API that does not know the field may refuse the request.'
+            rerank_url: "Search reranker (address)"
+            rerank_url_help: "Full address of a /rerank endpoint (Cohere/Jina shape, e.g. Qwen3-Reranker). Orders the results for \"Best matches\" and \"In short\" by how well they fit the search; the results list itself stays as it is. Empty: FORK_RERANK_URL applies, otherwise no reranker. \"Test\" sends a small probe."
+        fork_rerank:
+            ok: "Reranker answered in %ms% ms (match %match%, miss %miss%)."
+            failed: "The reranker did not answer as expected: %error%"
 message:
     fork_unsubscribe:
         label: "Unsubscribe"
