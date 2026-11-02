@@ -177,6 +177,24 @@ Requests nach einem Update, 184× die volle Datei. Die Dateinamen tragen den Inh
 `index.php` für einen nicht mehr existierenden Namen nicht ein Jahr gecacht wird.
 **Kandidat fürs Original:** ja (dort erst Issue, nur nach Freigabe).
 
+### 11. Neue Mail wartet beim Einsortieren nicht mehr 20 s auf sich selbst
+
+`src/Infrastructure/Messaging/Handler/ClassifyMailHandler.php`: `standAside()` nur noch, wenn die
+Nachricht nicht von `enrich_live` kommt (`EnrichmentRouter::LIVE !== $queue`). Test:
+`tests/Infrastructure/Messaging/Handler/ForkLiveMailNoSelfWaitTest.php`.
+
+**Grund:** Neue Mail, die nicht zurückgehalten wird (z. B. von einem bekannten Absender), geht wie
+zurückgehaltene auf `enrich_live`. Der Handler hielt jede nicht zurückgehaltene Mail für
+Hintergrundarbeit und ließ `enrich_live` vor (`LiveMailPriority`). Der Umschlag, den der Worker
+gerade bearbeitet, steht aber selbst noch geliefert in `messenger_messages` und zählt als
+„live-Arbeit in Bearbeitung“ – die Mail wartete also jedes Mal die Obergrenze von 20 s auf sich
+selbst ab, mehrere gleichzeitig ankommende nacheinander. Gemessen in der Produktion (2026-11-02):
+Testmail um 11:37:41 gespeichert, KI gefragt um 11:38:01; bei per IDLE angekommener, nicht
+zurückgehaltener Mail lag der Abstand meist bei 20–30 s oder über 60 s, bei zurückgehaltener im
+Median bei 0,4 s. Ein „Neu fragen“ ohne Warteschlange und echte Hintergrundarbeit treten weiter
+zur Seite.
+**Kandidat fürs Original:** ja (dort erst Issue, nur nach Freigabe).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,

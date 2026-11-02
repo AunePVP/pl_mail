@@ -146,7 +146,10 @@ final readonly class ClassifyMailHandler
 
             $held = null !== $mail->categoryHeldAt;
 
-            if (false === $held) {
+            // FORK (FORK.md): not on the live queue. Unheld recent mail is
+            // classified there too, and the envelope in hand counts as live
+            // work, so it stood aside for itself until the 20 s ceiling.
+            if (false === $held && EnrichmentRouter::LIVE !== $queue) {
                 // Bulk work, by elimination: an import, the catch-up after
                 // one, or somebody's "ask again" button. None of it may be in
                 // front of mail that has just arrived. See LiveMailPriority.
