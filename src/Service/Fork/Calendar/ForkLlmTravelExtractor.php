@@ -17,7 +17,9 @@ use App\Service\Calendar\Extraction\ExtractionContext;
 use App\Service\User\UserTimezoneResolver;
 use DateTimeImmutable;
 use DateTimeZone;
+use Doctrine\DBAL\Connection;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 
@@ -106,6 +108,8 @@ final readonly class ForkLlmTravelExtractor implements EventExtractorInterface
         private UserTimezoneResolver $timezones,
         private CacheInterface       $cache,
         private LoggerInterface      $logger,
+        private Connection           $connection,
+        private ClockInterface       $clock,
     ) {
     }
 
@@ -166,7 +170,7 @@ final readonly class ForkLlmTravelExtractor implements EventExtractorInterface
         foreach (array_slice($items, 0, self::MAX_ITEMS) as $item) {
             $event = true === is_array($item) ? $this->toExtractedEvent($item, $text, $anchor, $zone, $issuer) : null;
 
-            if (null !== $event) {
+            if (null !== $event && false === $this->isAlreadyKnown($context, $event)) {
                 $events[] = $event;
             }
         }
@@ -223,7 +227,7 @@ final readonly class ForkLlmTravelExtractor implements EventExtractorInterface
             - end: local clock time where it ends, same format, or null
             - end_zone: IANA time zone of the place where it ends, or null
             - location: where it starts (airport, station, hotel address), or null
-            - number: the flight or train number exactly as written, or null
+            - number: the flight or train number with its airline or train code, e.g. "LX1051" or "ICE 75" (add the airline code if the email writes it elsewhere), or null
             - reference: the booking reference or PNR exactly as written, or null
             - status: confirmed, pending or cancelled
             - evidence: a short quote copied verbatim from the email that contains the start date or time
@@ -305,6 +309,9 @@ final readonly class ForkLlmTravelExtractor implements EventExtractorInterface
             return null;
         }
 
+        // After the grounding, which checks the number as the model read it.
+        $number = $this->withCarrier($number, $this->string($item['title'] ?? null), $text);
+
         $allDay = 1 === preg_match('/^\d{4}-\d{2}-\d{2}$/', $startRaw);
 
         if (true === $allDay && 'hotel' !== $kindName && 'car' !== $kindName && 'event' !== $kindName) {
@@ -335,6 +342,14 @@ final readonly class ForkLlmTravelExtractor implements EventExtractorInterface
             $endsAt = null !== $endsAt && $endsAt > $startsAt ? $endsAt->modify('+1 day') : $startsAt->modify('+1 day');
         } elseif (null === $endsAt || $endsAt <= $startsAt || $endsAt > $startsAt->modify('+2 days')) {
             $endsAt = $startsAt->modify(sprintf('+%d minutes', self::NOMINAL_MINUTES[$kindName] ?? 60));
+        }
+
+        // A trip that is over is not worth an offer. Against now rather than
+        // the mail, unlike the bounds above, and on purpose: reading old mail
+        // (app:fork:llm-events) offered last summer's holiday on every one of
+        // its confirmations, and a card nobody will ever answer is noise.
+        if ($endsAt < $this->clock->now()->modify('-1 day')) {
+            return null;
         }
 
         $title    = $this->clamp($this->string($item['title'] ?? null) ?? $number ?? '', self::MAX_TITLE);
@@ -413,7 +428,7 @@ final readonly class ForkLlmTravelExtractor implements EventExtractorInterface
     {
         // Bidi marks (Trip.com puts them around "|") are invisible and a model drops them.
         $flat    = mb_strtolower((string) preg_replace('/[\s\x{202A}-\x{202E}]+/u', ' ', $text));
-        $compact = (string) preg_replace('/\s+/u', '', $flat);
+        $compact = (string) preg_replace('/[\s\x{00A0}\x{202F}]+/u', '', $flat);
 
         if (null === $evidence) {
             return false;
@@ -450,6 +465,60 @@ final readonly class ForkLlmTravelExtractor implements EventExtractorInterface
         }
 
         return true;
+    }
+
+    /**
+     * Whether this flight, stay or ticket is already on the user's calendar
+     * from a source that does not guess — the same kind at the same instant.
+     *
+     * Booking.com sends a confirmation with markup and, minutes later, a
+     * "booking information" mail without; the first put the flight on the
+     * calendar and the second would have offered it a second time, an offer
+     * that, accepted, draws the flight twice.
+     */
+    private function isAlreadyKnown(ExtractionContext $context, ExtractedEvent $event): bool
+    {
+        $user = $context->account->usr;
+
+        if (null === $user?->id) {
+            return false;
+        }
+
+        return false !== $this->connection->fetchOne(
+            "SELECT 1 FROM calendar_event
+              WHERE usr_id = :user AND kind = :kind AND source <> 'llm'
+                AND starts_at = :start AND status <> 'cancelled'
+              LIMIT 1",
+            [
+                'user'  => $user->id,
+                'kind'  => $event->kind?->value,
+                'start' => $event->startsAt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
+            ],
+        );
+    }
+
+    /**
+     * A flight number with its airline code.
+     *
+     * The model copies what it reads, and a mail that writes "Flug 1051"
+     * beside "Swiss (LX)" gives "1051" — a different key from "LX1051" in the
+     * next mail about the same flight, so one flight became two offers. When
+     * the number is bare digits, the code is taken from where it stands right
+     * before those digits — in the mail first, else in the model's title.
+     */
+    private function withCarrier(?string $number, ?string $title, string $text): ?string
+    {
+        if (null === $number || 1 !== preg_match('/^\d{1,5}$/', $number)) {
+            return $number;
+        }
+
+        foreach ([$text, (string) $title] as $haystack) {
+            if (1 === preg_match('/\b([A-Z]{2}|[A-Z]\d|\d[A-Z])[\s\x{00A0}]?' . $number . '\b/u', $haystack, $m)) {
+                return $m[1] . $number;
+            }
+        }
+
+        return $number;
     }
 
     // ── Small things ──────────────────────────────────────────────────────────
@@ -505,12 +574,12 @@ final readonly class ForkLlmTravelExtractor implements EventExtractorInterface
 
     private function normalised(string $value): string
     {
-        return mb_strtoupper((string) preg_replace('/\s+/u', '', $value));
+        return mb_strtoupper((string) preg_replace('/[\s\x{00A0}\x{202F}]+/u', '', $value));
     }
 
     private function normalisedLower(string $value): string
     {
-        return mb_strtolower((string) preg_replace('/\s+/u', '', $value));
+        return mb_strtolower((string) preg_replace('/[\s\x{00A0}\x{202F}]+/u', '', $value));
     }
 
     /** As StructuredDataEventExtractor::issuerDomain(), which is private there. */

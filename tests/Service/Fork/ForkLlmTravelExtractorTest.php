@@ -22,7 +22,9 @@ use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\Clock\Test\ClockSensitiveTrait;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use App\Entity\Calendar\CalendarEvent;
 
 /**
  * FORK (FORK.md): travel bookings read by the chat model.
@@ -33,6 +35,8 @@ use Symfony\Component\HttpClient\Response\MockResponse;
  */
 final class ForkLlmTravelExtractorTest extends KernelTestCase
 {
+    use ClockSensitiveTrait;
+
     /** An agency confirmation as ReadableBody gives it, shortened; made up. */
     private const string TRIP = "Flugbuchungsbestätigung\nWien - Köln | 4. Dezember 2026\n"
         . "09:20 VIE Flughafen Wien\nExample Air XY4321\n10:55 CGN Flughafen Köln/Bonn\nBuchungsnummer: QZ7K2P";
@@ -51,6 +55,9 @@ final class ForkLlmTravelExtractorTest extends KernelTestCase
     protected function setUp(): void
     {
         self::bootKernel();
+
+        // Before the fixtures' flight, whenever the suite runs.
+        self::mockTime('2026-10-15 12:00:00');
 
         $container = self::getContainer();
         $container->set('http_client', new MockHttpClient(function (): MockResponse {
@@ -179,6 +186,48 @@ final class ForkLlmTravelExtractorTest extends KernelTestCase
         self::assertCount(1, $touched);
         self::assertSame(ParticipationStatus::NeedsAction, $touched[0]->myParticipation);
         self::assertSame(EventSource::Llm, $touched[0]->source);
+    }
+
+    /** "4321" from one mail and "XY4321" from the next are one flight. */
+    public function testABareNumberGetsItsAirlineCode(): void
+    {
+        $this->answer = '{"items":[' . self::FLIGHT . ']}';
+        $full         = $this->extract($this->message(self::TRIP));
+
+        $this->answer = '{"items":[' . str_replace('"number":"XY4321"', '"number":"4321"', self::FLIGHT) . ']}';
+        $bare         = $this->extract($this->message(self::TRIP));
+
+        self::assertCount(1, $bare);
+        self::assertSame($full[0]->dedupKey, $bare[0]->dedupKey);
+    }
+
+    /** The markup already put it there; a second, guessed copy would draw it twice. */
+    public function testAFlightAlreadyOnTheCalendarIsNotOfferedAgain(): void
+    {
+        $event           = new CalendarEvent();
+        $event->calendar = self::getContainer()->get(CalendarProvisioner::class)->defaultFor($this->account->usr);
+        $event->usr      = $this->account->usr;
+        $event->uid      = uniqid('known-', true) . '@plmail';
+        $event->title    = 'XY4321 VIE → CGN';
+        $event->kind     = ExtractionKind::Flight;
+        $event->source   = EventSource::StructuredData;
+        $event->startsAt = new DateTimeImmutable('2026-12-04 08:20:00 UTC');
+        $event->endsAt   = new DateTimeImmutable('2026-12-04 09:55:00 UTC');
+        $this->em->persist($event);
+        $this->em->flush();
+
+        $this->answer = '{"items":[' . self::FLIGHT . ']}';
+
+        self::assertSame([], $this->extract($this->message(self::TRIP)));
+    }
+
+    /** Reading old mail must not offer last summer's holiday. */
+    public function testATripThatIsOverIsNotOffered(): void
+    {
+        self::mockTime('2027-01-10 12:00:00');
+        $this->answer = '{"items":[' . self::FLIGHT . ']}';
+
+        self::assertSame([], $this->extract($this->message(self::TRIP)));
     }
 
     // ── Fixtures ──────────────────────────────────────────────────────────

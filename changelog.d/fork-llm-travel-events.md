@@ -5,3 +5,8 @@ buses, stays, hire cars and tickets out of such mail. What it finds is only offe
 above the message, never put on the calendar by itself, and only when the flight number, booking
 reference and time it names are written in the mail. `app:fork:llm-events --since=<date>` reads
 mail that arrived earlier. No schema change.
+
+**Fewer duplicate trip suggestions.** A flight already on the calendar from a booking with markup
+is no longer suggested a second time from the follow-up mail without it, a flight number written
+without its airline code is matched to the same flight, and trips that are over are not suggested
+when older mail is read.
