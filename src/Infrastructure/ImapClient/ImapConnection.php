@@ -45,8 +45,10 @@ final class ImapConnection implements DeadlineClosable
      * DEFAULT_TIMEOUT_SECONDS used to be the deadline for a whole command response. One
      * import page (fifty messages with attachments, measured up to 569 MB on a server that
      * sends 3.5 MB/s) does not arrive in thirty seconds, so the same page timed out forever
-     * and history never came in. Connecting, TLS and login keep DEFAULT_TIMEOUT_SECONDS, so
-     * a dead host still fails fast; the worker's own limit is 300 s (ImapDeadline).
+     * and history never came in. Only after login, and only for a caller that did not ask
+     * for less than DEFAULT_TIMEOUT_SECONDS: connecting, TLS, CAPABILITY and login keep the
+     * caller's timeout, so a dead host still fails fast and the 10 s connection test in the
+     * browser stays 10 s. The worker's own limit is 300 s (ImapDeadline).
      */
     public const float COMMAND_TIMEOUT_SECONDS = 240.0;
 
@@ -151,7 +153,12 @@ final class ImapConnection implements DeadlineClosable
      */
     public function command(string $name, ImapArgument ...$arguments): ImapResult
     {
-        return $this->execute($name, $arguments, null, microtime(true) + max($this->timeoutSeconds, self::COMMAND_TIMEOUT_SECONDS));
+        // FORK (FORK.md): the long deadline once logged in, see COMMAND_TIMEOUT_SECONDS.
+        $seconds = true === $this->isAuthenticated && $this->timeoutSeconds >= self::DEFAULT_TIMEOUT_SECONDS
+            ? max($this->timeoutSeconds, self::COMMAND_TIMEOUT_SECONDS)
+            : $this->timeoutSeconds;
+
+        return $this->execute($name, $arguments, null, microtime(true) + $seconds);
     }
 
     /** Open a folder, read-write, or read-only with $readOnly (EXAMINE). */
@@ -387,7 +394,7 @@ final class ImapConnection implements DeadlineClosable
 
                 return '';
             },
-            microtime(true) + max($this->timeoutSeconds, self::COMMAND_TIMEOUT_SECONDS),
+            microtime(true) + $this->timeoutSeconds,
         );
     }
 
