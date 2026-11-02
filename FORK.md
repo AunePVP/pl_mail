@@ -20,8 +20,14 @@ git grep -n "FORK (FORK.md)"
 ### 1. IMAP-Befehls-Timeout 240 s statt 30 s
 
 `src/Infrastructure/ImapClient/ImapConnection.php`: neue Konstante `COMMAND_TIMEOUT_SECONDS = 240.0`;
-`command()` und das APPEND-Literal warten `max(timeoutSeconds, 240)` s auf die Antwort.
-Verbinden, TLS und Login bleiben bei 30 s.
+`command()` wartet nach dem Login `max(timeoutSeconds, 240)` s auf die Antwort, wenn der Aufrufer
+nicht weniger als 30 s verlangt hat. Verbinden, TLS, `CAPABILITY` und Login (auch XOAUTH2) behalten
+den Timeout des Aufrufers. Test: `tests/Infrastructure/ImapClient/ForkCommandDeadlineTest.php`.
+
+Bis 2026-11-02 galten die 240 s für jeden Befehl, auch `CAPABILITY`/`LOGIN`/`AUTHENTICATE` vor dem
+Login, und überschrieben kürzere Timeouts: Ein Server, der grüßt und dann hängt, hielt einen Sync
+4 min fest, und der 10-s-Verbindungstest im Browser lief in PHPs 30-s-Grenze (Fatal Error statt
+Meldung).
 
 **Grund:** Im Original ist der 30-s-Timeout die Frist für die *ganze* Antwort eines Befehls. Eine
 Import-Seite (50 Mails mit vollem Inhalt in einem `UID FETCH`) war auf einem Firmen-Postfach bis
