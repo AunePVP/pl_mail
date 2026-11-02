@@ -27,7 +27,10 @@ use Symfony\Contracts\Cache\ItemInterface;
  *
  * The reranker's order is cached per user, query and result set for a few
  * minutes: both frames ask for it within a second of each other, and the
- * second should not pay for the model again.
+ * second should not pay for the model again. The cache's own stampede lock
+ * makes the second wait for the first rather than ask in parallel. A failure is
+ * kept too, for a minute: the answer's stream and its reload come seconds
+ * later, and each would otherwise wait out the timeout again.
  */
 final readonly class ForkSearchCandidates
 {
@@ -37,6 +40,9 @@ final readonly class ForkSearchCandidates
     private const int SNIPPET = 300;
 
     private const int CACHE_SECONDS = 600;
+
+    /** How long "the reranker did not answer" stands for one search. */
+    private const int FAILURE_SECONDS = 60;
 
     /** How quickly age discounts a reranked result; see weighted(). */
     private const float AGE_DAYS = 45.0;
@@ -133,7 +139,7 @@ final readonly class ForkSearchCandidates
             ));
 
             if (null === $scores) {
-                $item->expiresAfter(1);
+                $item->expiresAfter(self::FAILURE_SECONDS);
             }
 
             return $scores;

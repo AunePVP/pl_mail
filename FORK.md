@@ -416,7 +416,11 @@ Umgebungsvariable **`FORK_RERANK_URL`**: volle Adresse eines `/rerank`-Endpoints
 (POST `{query, documents, top_n, instruction}`, Antwort `{results: [{index, relevance_score}]}`), z. B.
 Qwen3-Reranker-0.6B. Die Adresse auf der Seite gilt vor der Variable; ist beides leer, ist der
 Reranker aus und alles wie in Abweichung 16. Die Adresse muss **aus dem plmail-Container** erreichbar
-sein (LAN-IP bzw. Docker-Gateway, nicht `*.local`). Timeout 4 s; jeder Fehler heißt „ohne Ranking“.
+sein (LAN-IP bzw. Docker-Gateway, nicht `*.local`). Timeout 8 s; jeder Fehler heißt „ohne Ranking“
+und gilt für diese Suche 60 s, damit Stream und Nachladen von „Kurz gesagt“ nicht noch einmal warten.
+(Mit 4 s scheiterte jedes Ranking: Qwen3-Reranker-4B braucht auf der A380 für 50 Treffer 5,9 s, mit
+geteiltem Präfix-Cache 2,7 s.) Gleichzeitige Anfragen beider Felder rechnen nicht doppelt: der
+Stampede-Lock des Symfony-Caches (`LockRegistry`, im Webserver aktiv) lässt die zweite warten.
 „Testen“ schickt der Adresse im Feld eine kleine Probe (ein Treffer, ein Nicht-Treffer) und zeigt
 Antwortzeit und Scores unter dem Feld, ohne zu speichern.
 

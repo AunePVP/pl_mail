@@ -26,12 +26,19 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  * variable is the deployment's default and the page is where it is changed.
  *
  * Every failure is "no ranking": the panels it feeds simply fall back to the
- * search's own order. A slow model must not hold a search page, so the timeout
- * is short.
+ * search's own order. The timeout is what fifty results take on the hardware
+ * this runs on, with room for a cold start, and no more: a slow model must not
+ * hold a search page, and ForkSearchCandidates remembers a failure, so one
+ * search pays for it at most once.
  */
 final readonly class ForkReranker
 {
-    private const float TIMEOUT = 4.0;
+    /**
+     * Qwen3-Reranker-4B on an Arc A380: 2.7 s for fifty results with a shared
+     * prefix cache, 5.9 s without (2026-11-02). Four seconds failed every ranking
+     * of the second.
+     */
+    private const float TIMEOUT = 8.0;
 
     /** Qwen3-Reranker is trained with an instruction; this one says what a "match" is here. */
     private const string INSTRUCTION = 'Given a search someone typed into their own mailbox, judge whether this email is one they are looking for or that answers what they want to know';
