@@ -11,16 +11,21 @@ import { settled } from "./support/motion";
  */
 const LINK = "https://news.example.com/unsubscribe?u=1&t=2";
 
+/** One message of this worker's conversation fixture: the newest, or the first. */
+function updateMessage(set: string, order: "DESC" | "ASC"): void {
+    consoleCommand(
+        `dbal:run-sql "UPDATE message SET ${set}`
+        + ` WHERE id = (SELECT m.id FROM message m JOIN account a ON a.id = m.account_id`
+        + ` JOIN \\"user\\" u ON u.id = a.usr_id WHERE u.email = '${TEST_USER.email}'`
+        + ` AND m.subject LIKE '%E2E Conversation' ORDER BY m.received_at ${order} NULLS LAST, m.id ${order} LIMIT 1)"`,
+    );
+}
+
 function giveTheNewestMessageAnUnsubscribeHeader(): void {
     // Built in SQL: double quotes from JSON would end the shell argument.
     const header = `jsonb_build_object('list-unsubscribe', '<mailto:stop@example.com>, <${LINK}>')`;
 
-    consoleCommand(
-        `dbal:run-sql "UPDATE message SET headers = (COALESCE(headers::jsonb, '{}'::jsonb) || ${header})::json`
-        + ` WHERE id = (SELECT m.id FROM message m JOIN account a ON a.id = m.account_id`
-        + ` JOIN \\"user\\" u ON u.id = a.usr_id WHERE u.email = '${TEST_USER.email}'`
-        + ` AND m.subject LIKE '%E2E Conversation' ORDER BY m.received_at DESC NULLS LAST, m.id DESC LIMIT 1)"`,
-    );
+    updateMessage(`headers = (COALESCE(headers::jsonb, '{}'::jsonb) || ${header})::json`, "DESC");
 }
 
 test("a newsletter's Unsubscribe button opens the sender's link", async ({ page }, testInfo) => {
@@ -53,4 +58,29 @@ test("a newsletter's Unsubscribe button opens the sender's link", async ({ page 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(chip).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("narrow.png") });
+});
+
+/**
+ * No header, only a footer sentence: the link is found in the text. The first
+ * message of the thread, because the replies carry In-Reply-To and a reply is
+ * never searched. Unquoted href for the same shell reason as above.
+ */
+test("without the header the link is taken from the mail's text", async ({ page }) => {
+    seed("seed-conversation");
+    const footer = "https://clicks.example.com/f/a/2";
+    updateMessage(
+        `body_html = '<p>News.</p><p>Wenn du keine weiteren Nachrichten erhalten möchtest, kannst du dich`
+        + ` <a href=${footer}>hier</a> abmelden.</p>'`,
+        "ASC",
+    );
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/mail/inbox");
+    await settled(page);
+    await mailRow(page, "E2E Conversation").click();
+
+    const chip = page.locator(".thread-message-meta > a[data-fork-unsubscribe]");
+    await expect(chip).toHaveCount(1, { timeout: 10_000 });
+    await expect(chip).toHaveAttribute("href", footer);
+    await expect(chip).toHaveAttribute("title", /text/);
 });

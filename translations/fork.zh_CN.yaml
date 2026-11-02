@@ -8,6 +8,7 @@ message:
         label: "退订"
         hint_link: "在新标签页中打开发件人的退订页面"
         hint_mail: "打开一封发往发件人退订地址的邮件"
+        hint_body: "在新标签页中打开此邮件正文中的退订链接"
 search:
     fork_insight:
         best_heading: "最佳匹配"

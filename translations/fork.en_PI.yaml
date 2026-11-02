@@ -8,6 +8,7 @@ message:
         label: "Abandon ship"
         hint_link: "Opens the sender's unsubscribe page in a fresh tab"
         hint_mail: "Opens a letter to the sender's unsubscribe address"
+        hint_body: "Opens the unsubscribe link found in this letter's text in a fresh tab"
 search:
     fork_insight:
         best_heading: "Finest plunder"
