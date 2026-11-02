@@ -215,6 +215,32 @@ sie als Spam, alle anderen Programme im Archiv, der Spamfilter des Servers lernt
 Liste (nicht Posteingang, nicht Archiv). Schon so abgelegte Mail wird nicht nachträglich verschoben.
 **Kandidat fürs Original:** ja (dort erst Issue, nur nach Freigabe).
 
+### 13. Abmelden-Knopf aus `List-Unsubscribe`
+
+Im Kopf jeder Nachricht links neben dem Datum ein Knopf „Abmelden“, dazu derselbe Punkt im ⋮-Menü,
+wenn die Mail einen `List-Unsubscribe`-Header hat (RFC 2369). Ein Weblink öffnet sich in einem neuen
+Tab (`rel="noopener noreferrer nofollow"`), sonst öffnet ein `mailto:` einen Entwurf an die Adresse
+(`app_compose_new?to=`, nur die Adresse, Betreff/Text des mailto werden nicht übernommen). Weblinks
+gehen vor, egal in welcher Reihenfolge der Header sie nennt; nur `http(s)` und `mailto:`. Kein
+Knopf in Spam und Papierkorb. plMail schickt selbst nichts ab (keine Ein-Klick-Abmeldung nach
+RFC 8058 – das wäre ein Request des Servers an fremde Adressen).
+
+Neue Dateien: `src/Twig/Fork/ForkUnsubscribeExtension.php` (Twig-Funktion `fork_unsubscribe()`,
+liest auch MIME-kodierte Header und Links ohne spitze Klammern), `templates/fork/_unsubscribe.html.twig`,
+Schlüssel `message.fork_unsubscribe.*` in `translations/fork.*.yaml`, Test
+`tests/Twig/Fork/ForkUnsubscribeTest.php`.
+
+Änderungen an Dateien des Originals (mit `FORK (FORK.md)` markiert), je ein `include`:
+
+- `templates/mail/_thread_message.html.twig`: in `thread-message-meta` vor dem Datum.
+- `templates/mail/_message_actions.html.twig`: vor „Filter aus dieser Nachricht erstellen“.
+
+**Datenbank:** keine Änderung; der Header steht schon in `message.headers`.
+
+**Grund:** Den Abmeldelink im Kleingedruckten am Ende einer Mail muss man suchen. In der Produktion
+(2026-11-02) hatten 5 153 von 48 633 Mails den Header, 5 133 davon mit brauchbarem Ziel.
+**Kandidat fürs Original:** ja, als Funktion (dort erst Issue, nur nach Freigabe).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,

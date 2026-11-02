@@ -233,6 +233,9 @@ Variables:
         </div>
 
         <div class="thread-message-meta flex items-center gap-1 flex-shrink-0">
+            {# FORK (FORK.md): Unsubscribe from List-Unsubscribe, always in this spot. #}
+            {% include 'fork/_unsubscribe.html.twig' with { message: message, variant: 'chip' } only %}
+
             <span class="thread-message-date text-xs text-ink-faint whitespace-nowrap">
                 {# Date through the locale, time through the user's 12/24-hour
                    setting: the two answer different questions and only one of

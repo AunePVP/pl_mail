@@ -3,3 +3,8 @@ admin:
         field:
             reasoning: '允许写作模型推理'
             reasoning_help: '关闭后，模型会直接回答而不先思考：回复、分类和摘要更快，但通常稍欠严谨。对 Ollama 发送 think: false，对 OpenAI 兼容服务器（vLLM、SGLang、llama.cpp）发送 chat_template_kwargs.enable_thinking: false。不认识该字段的托管 API 可能会拒绝请求。'
+message:
+    fork_unsubscribe:
+        label: "退订"
+        hint_link: "在新标签页中打开发件人的退订页面"
+        hint_mail: "打开一封发往发件人退订地址的邮件"

@@ -118,6 +118,9 @@ Variables:
 
         <div class="border-t border-line my-1"></div>
 
+        {# FORK (FORK.md): Unsubscribe from List-Unsubscribe. #}
+        {% include 'fork/_unsubscribe.html.twig' with { message: message, variant: 'menu' } only %}
+
         {# Opens Settings → Filters with the editor already holding this
            message's sender; the reader chooses what the filter does. #}
         <a href="{{ path('app_settings_index', { section: 'filters', from_message: message.id }) }}"
