@@ -161,6 +161,22 @@ Datenbank, der Konfig-Export des Originals kennt sie nicht).
 kostet das viel Zeit und bringt wenig.
 **Kandidat fürs Original:** ja, dort als Feld in `ai_settings` (dort erst Issue, nur nach Freigabe).
 
+### 10. `Cache-Control: immutable` für `/assets`
+
+`frankenphp/Caddyfile`: Matcher `@assets` (`path /assets/*` und `file`) mit
+`Cache-Control: public, max-age=31536000, immutable` vor `php_server`.
+
+**Grund:** Die Seite zeigt morgens sofort Mail, reagiert aber 10 s lang auf keinen Klick. Gemessen
+(Caddy-Access-Log, 2026-11-02): nach dem HTML lädt der Browser ~185 einzelne ES-Module (alle
+Stimulus-Controller sind eager; Stimulus startet erst, wenn alle da sind), letztes Modul 9,5–11,7 s
+nach dem HTML, serverseitig jedes < 30 ms. Das Original sendet für `/assets` kein `Cache-Control`,
+nur ETag und Last-Modified; der Browser schätzt die Frische und fragt nach einer Nacht alles neu an.
+Caddys ETag ist mtime+Größe, jedes neue Image gibt allen Dateien eine neue mtime: 184 bedingte
+Requests nach einem Update, 184× die volle Datei. Die Dateinamen tragen den Inhalts-Hash
+(`asset-map:compile`), sind also sicher dauerhaft cachebar. `file` im Matcher, damit ein 404 aus
+`index.php` für einen nicht mehr existierenden Namen nicht ein Jahr gecacht wird.
+**Kandidat fürs Original:** ja (dort erst Issue, nur nach Freigabe).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,

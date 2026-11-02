@@ -108,6 +108,26 @@
                 }
         }
 
+        # FORK (FORK.md): compiled assets are immutable, and the browser is told so.
+        #
+        # Every file under /assets carries its content digest in its name
+        # (asset-map:compile), so a changed file is a new name and a cached one
+        # can never go stale. Without this header the file server sends only
+        # ETag and Last-Modified: the browser guesses a freshness of its own,
+        # and after a night it asks for all ~180 modules again before Stimulus
+        # starts — the page shows mail at once and answers no click for ten
+        # seconds. Worse, Caddy's ETag is mtime+size, and every new image gives
+        # every file a new mtime, so each conditional request after an update
+        # is answered with the whole file, hash or no hash.
+        #
+        # `file` as well as `path`: a name that no longer exists falls through
+        # to index.php, and a 404 must not be cached for a year.
+        @assets {
+                path /assets/*
+                file
+        }
+        header @assets Cache-Control "public, max-age=31536000, immutable"
+
         php_server {
                 try_files {path} index.php
         }
