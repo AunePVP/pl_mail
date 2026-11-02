@@ -227,8 +227,8 @@ RFC 8058 – das wäre ein Request des Servers an fremde Adressen).
 
 Neue Dateien: `src/Twig/Fork/ForkUnsubscribeExtension.php` (Twig-Funktion `fork_unsubscribe()`,
 liest auch MIME-kodierte Header und Links ohne spitze Klammern), `templates/fork/_unsubscribe.html.twig`,
-Schlüssel `message.fork_unsubscribe.*` in `translations/fork.*.yaml`, Test
-`tests/Twig/Fork/ForkUnsubscribeTest.php`.
+Schlüssel `message.fork_unsubscribe.*` in `translations/fork.*.yaml`, Tests
+`tests/Twig/Fork/ForkUnsubscribeTest.php` und `tests/e2e/fork-unsubscribe.spec.ts`.
 
 Änderungen an Dateien des Originals (mit `FORK (FORK.md)` markiert), je ein `include`:
 
