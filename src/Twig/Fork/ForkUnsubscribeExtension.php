@@ -6,6 +6,7 @@ namespace App\Twig\Fork;
 
 use App\Domain\Helper\AddressHelper;
 use App\Entity\Mail\Message;
+use App\Service\Fork\ForkUnsubscribeFinder;
 use App\Service\Mail\HeaderNormalizer;
 use App\Service\Mail\MailPlacement;
 use Twig\Extension\AbstractExtension;
@@ -24,6 +25,11 @@ use Twig\TwigFunction;
  * Two shapes seen in real mail that the RFC does not describe: the whole value
  * as MIME encoded-words (folded by the sender's mailer and stored undecoded),
  * and a bare URL without the brackets. Both are read.
+ *
+ * Without the header the mail's own text is searched (ForkUnsubscribeFinder),
+ * marked `body` so the button can say where its link came from. Not in a reply
+ * or a draft: a reply that quotes a newsletter is not one, and a draft is your
+ * own text.
  *
  * Nothing for mail in spam or the bin: an unsubscribe link in spam mostly tells
  * the spammer the address is read, which is why Gmail hides it there too.
@@ -44,7 +50,8 @@ final class ForkUnsubscribeExtension extends AbstractExtension
     }
 
     /**
-     * @return array{url: string}|array{to: string}|null a web link, a mailbox to write to, or nothing
+     * @return array{url: string}|array{to: string}|array{url: string, body: true}|null
+     *         a web link, a mailbox to write to, a link found in the text, or nothing
      */
     public function target(Message $message): ?array
     {
@@ -52,7 +59,19 @@ final class ForkUnsubscribeExtension extends AbstractExtension
             return null;
         }
 
-        return self::parse($this->headers->first($message->headers, 'list-unsubscribe'));
+        $fromHeader = self::parse($this->headers->first($message->headers, 'list-unsubscribe'));
+
+        if (null !== $fromHeader) {
+            return $fromHeader;
+        }
+
+        if (true === $message->isDraft() || null !== $this->headers->first($message->headers, 'in-reply-to')) {
+            return null;
+        }
+
+        $url = ForkUnsubscribeFinder::find($message->bodyHtml, $message->bodyText);
+
+        return null === $url ? null : ['url' => $url, 'body' => true];
     }
 
     /**

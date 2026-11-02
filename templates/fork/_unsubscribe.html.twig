@@ -4,7 +4,8 @@ fork/_unsubscribe.html.twig
 FORK (FORK.md): the Unsubscribe button, drawn from the List-Unsubscribe
 header so the reader never has to hunt the footer for it. Nothing at all
 for mail without the header, and none in spam or the bin (see
-App\Twig\Fork\ForkUnsubscribeExtension).
+App\Twig\Fork\ForkUnsubscribeExtension). Without the header, the link is
+looked for in the mail's text (App\Service\Fork\ForkUnsubscribeFinder).
 
 A web link opens in a new tab, where the sender's own page asks for the
 confirmation: plMail sends nothing anywhere on its own. A mailto: opens a
@@ -14,10 +15,13 @@ Variables:
   message  Message
   variant  'chip' (message header, beside the date) | 'menu' (the ⋮ menu)
 #}
+{# A link found in the mail's text rather than its header says so in the
+   tooltip: it is a guess, and the reader should know it is one. #}
 {% set target = fork_unsubscribe(message) %}
 {% if target is not null %}
     {% set label = 'message.fork_unsubscribe.label'|trans({}, 'fork') %}
-    {% set hint  = (target.url is defined ? 'message.fork_unsubscribe.hint_link' : 'message.fork_unsubscribe.hint_mail')|trans({}, 'fork') %}
+    {% set hint  = (target.body is defined ? 'message.fork_unsubscribe.hint_body'
+        : (target.url is defined ? 'message.fork_unsubscribe.hint_link' : 'message.fork_unsubscribe.hint_mail'))|trans({}, 'fork') %}
     {% set attrs = target.url is defined
         ? { href: target.url, target: '_blank', rel: 'noopener noreferrer nofollow', 'data-turbo': 'false' }
         : { href: path('app_compose_new', { to: target.to }), 'data-turbo-frame': 'compose_dock', 'data-controller': 'compose--frame-target', 'data-turbo-prefetch': 'false' } %}

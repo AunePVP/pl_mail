@@ -8,6 +8,7 @@ message:
         label: "Se désabonner"
         hint_link: "Ouvre la page de désabonnement de l'expéditeur dans un nouvel onglet"
         hint_mail: "Ouvre un message vers l'adresse de désabonnement de l'expéditeur"
+        hint_body: "Ouvre le lien de désabonnement trouvé dans le texte de ce message dans un nouvel onglet"
 search:
     fork_insight:
         best_heading: "Meilleurs résultats"

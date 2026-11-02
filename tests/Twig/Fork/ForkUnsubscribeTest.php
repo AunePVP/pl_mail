@@ -99,6 +99,42 @@ final class ForkUnsubscribeTest extends KernelTestCase
         self::assertStringNotContainsString('data-fork-unsubscribe', $this->render($message, 'chip'));
     }
 
+    // ── without the header: the mail's own text ─────────────────────────
+
+    private const string FOOTER = '<p>Wenn du keine weiteren Nachrichten erhalten möchtest, kannst du dich '
+        . '<a href="https://clicks.example.com/f/a/2">hier</a> abmelden.</p>';
+
+    public function testWithoutTheHeaderTheLinkComesFromTheText(): void
+    {
+        $message           = $this->message(null);
+        $message->bodyHtml = self::FOOTER;
+
+        $html = $this->render($message, 'chip');
+
+        self::assertStringContainsString('href="https://clicks.example.com/f/a/2"', $html);
+        self::assertStringContainsString("found in this mail&#039;s text", $html);
+    }
+
+    public function testTheHeaderWinsOverTheText(): void
+    {
+        $message           = $this->message('<https://u.example.com/x>');
+        $message->bodyHtml = self::FOOTER;
+
+        $html = $this->render($message, 'chip');
+
+        self::assertStringContainsString('href="https://u.example.com/x"', $html);
+        self::assertStringNotContainsString('clicks.example.com', $html);
+    }
+
+    public function testAReplyDoesNotBorrowTheLinkOfWhatItQuotes(): void
+    {
+        $message           = $this->message(null);
+        $message->headers  = ['in-reply-to' => '<a@example.com>'];
+        $message->bodyHtml = self::FOOTER;
+
+        self::assertStringNotContainsString('data-fork-unsubscribe', $this->render($message, 'chip'));
+    }
+
     private function message(?string $header): Message
     {
         $message          = new Message();

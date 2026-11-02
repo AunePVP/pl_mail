@@ -8,6 +8,7 @@ message:
         label: "Abmelden"
         hint_link: "Öffnet die Abmeldeseite des Absenders in einem neuen Tab"
         hint_mail: "Öffnet eine Mail an die Abmeldeadresse des Absenders"
+        hint_body: "Öffnet den Abmeldelink aus dem Text dieser Mail in einem neuen Tab"
 search:
     fork_insight:
         best_heading: "Beste Treffer"

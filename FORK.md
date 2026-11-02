@@ -225,10 +225,31 @@ gehen vor, egal in welcher Reihenfolge der Header sie nennt; nur `http(s)` und `
 Knopf in Spam und Papierkorb. plMail schickt selbst nichts ab (keine Ein-Klick-Abmeldung nach
 RFC 8058 – das wäre ein Request des Servers an fremde Adressen).
 
+**Ohne Header: Link aus dem Mailtext** (`ForkUnsubscribeFinder`, seit 2026-11-02). Gesucht wird nur,
+wenn der Header fehlt oder nichts Brauchbares enthält, nicht in Entwürfen und nicht in Antworten
+(`In-Reply-To`), und nur `http(s)`-Links außerhalb von Zitaten (`<blockquote>`, `gmail_quote` u. a.).
+Der Hinweis am Knopf sagt dann, dass der Link aus dem Text stammt. Regeln, in dieser Reihenfolge:
+
+1. Ein Link, dessen Text (oder `alt` eines Bildes darin) das sagt: Wortstämme wie `unsubscri`,
+   `abmeld`, `abzumeld`, `abbestell`, `désabonn`, `opt-out`, `afmeld`, `退订`.
+2. Sonst der einzige Weblink im kleinsten umgebenden Element (≤ 400 Zeichen), dessen Text so ein
+   Wort enthält – und nur, wenn der Link „hier“/„here“/„Link“/„klicken Sie hier“ … heißt oder Text
+   bzw. Adresse nach Abmeldung/Einstellungen aussieht (`preferences`, `settings`, `einstellungen`,
+   `subscription`, …). Ohne diese Bedingung nahm die Suche „Help Centre“, „Datenschutzerklärung“,
+   „Follow us on Twitter“ aus Sätzen wie „To unsubscribe, see our Help Centre“.
+3. Von mehreren Treffern der letzte (Fußzeile). Nur-Text-Mails: eine Zeile mit so einem Wort und
+   die eine URL darauf oder auf der nächsten Zeile.
+
+Nie: `tools.google.com/dlpage/gaoptout` (Analytics-Opt-out aus Datenschutzzeilen). Geprüft am
+2026-11-02 an allen Mails der Produktion ohne Header (nur lesend, im Container): Knopf bei 1 469 von
+2 349 Mails mit Abmeldewort im Text, bei 18 von 21 755 ohne; die Fehltreffer der ersten Fassung
+(s. o.) sind weg, Bitpanda u. ä. („kannst du dich hier abmelden“) werden gefunden.
+
 Neue Dateien: `src/Twig/Fork/ForkUnsubscribeExtension.php` (Twig-Funktion `fork_unsubscribe()`,
-liest auch MIME-kodierte Header und Links ohne spitze Klammern), `templates/fork/_unsubscribe.html.twig`,
-Schlüssel `message.fork_unsubscribe.*` in `translations/fork.*.yaml`, Tests
-`tests/Twig/Fork/ForkUnsubscribeTest.php` und `tests/e2e/fork-unsubscribe.spec.ts`.
+liest auch MIME-kodierte Header und Links ohne spitze Klammern), `src/Service/Fork/ForkUnsubscribeFinder.php`,
+`templates/fork/_unsubscribe.html.twig`, Schlüssel `message.fork_unsubscribe.*` in
+`translations/fork.*.yaml`, Tests `tests/Twig/Fork/ForkUnsubscribeTest.php`,
+`tests/Service/Fork/ForkUnsubscribeFinderTest.php` und `tests/e2e/fork-unsubscribe.spec.ts`.
 
 Änderungen an Dateien des Originals (mit `FORK (FORK.md)` markiert), je ein `include`:
 

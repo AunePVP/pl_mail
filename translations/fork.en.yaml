@@ -8,6 +8,7 @@ message:
         label: "Unsubscribe"
         hint_link: "Opens the sender's unsubscribe page in a new tab"
         hint_mail: "Opens a message to the sender's unsubscribe address"
+        hint_body: "Opens the unsubscribe link found in this mail's text in a new tab"
 search:
     fork_insight:
         best_heading: "Best matches"
