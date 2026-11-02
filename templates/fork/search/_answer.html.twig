@@ -17,7 +17,7 @@
                         {% for thread in answer.important %}
                             <li class="text-xs truncate">
                                 <i class="fa-solid fa-arrow-right text-accent text-[10px] mr-1" aria-hidden="true"></i>
-                                <a href="{{ path('app_mail_thread', { id: thread.id }) }}" class="text-ink-soft hover:text-accent hover:underline">
+                                <a href="{{ path('app_mail_thread', { id: thread.id }) }}" data-action="click->mail--mail-pane#open" class="text-ink-soft hover:text-accent hover:underline">
                                     <span class="text-ink-faint">{{ thread.lastMessageAt ? thread.lastMessageAt|intl_date('dMMM') : '' }}</span>
                                     {{ thread.subject|default('—') }}
                                 </a>
@@ -37,7 +37,7 @@
                                 <ul class="mt-0.5 pl-4 space-y-0.5">
                                     {% for thread in group.threads %}
                                         <li class="truncate">
-                                            <a href="{{ path('app_mail_thread', { id: thread.id }) }}" class="text-ink-soft hover:text-accent hover:underline">
+                                            <a href="{{ path('app_mail_thread', { id: thread.id }) }}" data-action="click->mail--mail-pane#open" class="text-ink-soft hover:text-accent hover:underline">
                                                 <span class="text-ink-faint">{{ thread.lastMessageAt ? thread.lastMessageAt|intl_date('dMMM') : '' }}</span>
                                                 {{ thread.subject|default('—') }}
                                             </a>

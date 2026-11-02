@@ -5,12 +5,19 @@
 
     Only on the first page of a search with words in it: a page further down is
     somebody reading the list, not asking a question.
+
+    The panels' links open their mail the way a row of the list does
+    (mail--mail-pane#open). A plain link navigated the lazy frame it sat in:
+    Turbo moves only the CONTENTS of the frame that arrives into this
+    placeholder, so the `target="_top"` written on it was never read, and the
+    page went blank until a reload. The placeholders say `_top` themselves for
+    anything else that is clicked in them.
 #}
 <li class="border-b border-line" data-fork-search-insight>
-    <turbo-frame id="fork-search-trips" src="{{ path('app_fork_search_trips', { q: q }) }}" loading="lazy"></turbo-frame>
+    <turbo-frame id="fork-search-trips" src="{{ path('app_fork_search_trips', { q: q }) }}" loading="lazy" target="_top"></turbo-frame>
     {% if has_results %}
-        <turbo-frame id="fork-search-best" src="{{ path('app_fork_search_best', { q: q }) }}" loading="lazy"></turbo-frame>
-        <turbo-frame id="fork-search-answer" src="{{ path('app_fork_search_answer', { q: q }) }}" loading="lazy">
+        <turbo-frame id="fork-search-best" src="{{ path('app_fork_search_best', { q: q }) }}" loading="lazy" target="_top"></turbo-frame>
+        <turbo-frame id="fork-search-answer" src="{{ path('app_fork_search_answer', { q: q }) }}" loading="lazy" target="_top">
             <div class="px-4 py-2.5 flex items-center gap-2 text-xs text-ink-faint" data-fork-answer-state="loading">
                 <i class="fa-solid fa-wand-magic-sparkles animate-pulse" aria-hidden="true"></i>
                 {{ 'search.fork_insight.loading'|trans({}, 'fork') }}

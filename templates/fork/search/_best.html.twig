@@ -10,7 +10,7 @@
                 {% for candidate in best %}
                     {% set thread = candidate.thread %}
                     <li class="rounded-md border border-line px-3 py-1.5 text-sm" data-fork-best-row="{{ thread.id }}">
-                        <a href="{{ path('app_mail_thread', { id: thread.id }) }}" class="flex items-baseline gap-2 min-w-0 hover:text-accent">
+                        <a href="{{ path('app_mail_thread', { id: thread.id }) }}" data-action="click->mail--mail-pane#open" class="flex items-baseline gap-2 min-w-0 hover:text-accent">
                             <span class="font-medium text-ink truncate">{{ thread.subject|default('—') }}</span>
                             <span class="text-xs text-ink-muted truncate flex-shrink min-w-0">{{ candidate.sender }}</span>
                             <span class="ml-auto text-xs text-ink-faint flex-shrink-0">{{ thread.lastMessageAt ? thread.lastMessageAt|intl_date('dMMM') : '' }}</span>

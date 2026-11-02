@@ -35,6 +35,7 @@
                                     {% for mail in trip.mail %}
                                         <li class="text-xs truncate">
                                             <a href="{{ mail.thread ? path('app_mail_thread', { id: mail.thread }) : path('app_mail_message', { id: mail.id }) }}"
+                                               data-action="click->mail--mail-pane#open"
                                                class="text-ink-soft hover:text-accent hover:underline">
                                                 <span class="text-ink-faint">{{ mail.receivedAt ? mail.receivedAt|intl_date('dMMM') : '' }}</span>
                                                 <span class="font-medium">{{ mail.from }}</span> · {{ mail.subject }}

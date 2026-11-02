@@ -27,7 +27,8 @@ use Doctrine\ORM\EntityManagerInterface;
  * extractor read it from (EventSourceLink), plus the mail whose subject names
  * the same flight or train number — the parking booking and the gate change
  * that no extractor claimed are still about XY 1234. That is the grouping:
- * eight messages about one trip become one line with eight links.
+ * eight messages about one trip become one line with eight links. Only the
+ * mail around this trip, though: the same number flies every week (mailFor()).
  *
  * Offers (an event extraction only offered, see EventReconciler) are included
  * and marked, because "is my flight on the calendar?" is half of what the
@@ -43,6 +44,15 @@ final readonly class ForkTripFinder
     private const int MAX_EVENTS = 5;
 
     private const int MAX_MAIL = 8;
+
+    /** A parking or seat booking may be made a little before the flight is on the calendar's books. */
+    private const string BEFORE_BOOKING = '-7 days';
+
+    /** For an event no mail was read from: how far back its number still means it. */
+    private const string UNBOOKED_LOOKBACK = '-90 days';
+
+    /** A receipt or a delay notice a day or two after still belongs; later mail is about a later flight. */
+    private const string AFTERMATH = '+2 days';
 
     /**
      * Query words that name a kind of event rather than something in its title.
@@ -187,7 +197,7 @@ final readonly class ForkTripFinder
 
         $numbers = $this->serviceNumbers((string) $event->title);
 
-        if ([] !== $numbers) {
+        if ([] !== $numbers && null !== $event->startsAt) {
             $patterns = [];
 
             foreach ($numbers as [$carrier, $digits]) {
@@ -195,19 +205,38 @@ final readonly class ForkTripFinder
                 $patterns[] = sprintf('\m%s\s?%s\M', preg_quote($carrier, '/'), $digits);
             }
 
+            // A flight number comes back every week. The parking booking for
+            // April's XY 1234 names the same number as December's, so a mail is
+            // only this trip's when it is not already another event's, came no
+            // earlier than this trip's own booking, and no other XY 1234 on the
+            // calendar lies between it and this one.
             $rows = array_merge($rows, $this->connection->fetchAllAssociative(
                 'SELECT m.id, m.thread_id, m.subject, coalesce(nullif(m.from_name, \'\'), m.from_address) AS sender, m.received_at
                    FROM message m
                    JOIN account a ON a.id = m.account_id
                   WHERE a.usr_id = :user
                     AND m.received_at >= :since
+                    AND m.received_at < :until
                     AND m.subject ~* :pattern
+                    AND NOT EXISTS (
+                        SELECT 1 FROM event_source_link o WHERE o.message_id = m.id AND o.event_id <> :event
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1 FROM calendar_event e
+                         WHERE e.usr_id = :user AND e.id <> :event AND e.status <> :cancelled
+                           AND e.starts_at > m.received_at AND e.starts_at < :start
+                           AND e.title ~* :pattern
+                    )
                   ORDER BY m.received_at DESC
                   LIMIT 50',
                 [
-                    'user'    => $user->id,
-                    'since'   => ($event->startsAt ?? new DateTimeImmutable())->modify('-400 days')->format('Y-m-d H:i:s'),
-                    'pattern' => implode('|', $patterns),
+                    'user'      => $user->id,
+                    'event'     => $event->id,
+                    'cancelled' => EventStatus::Cancelled->value,
+                    'since'     => $this->numberedMailSince($event, $rows)->format('Y-m-d H:i:s'),
+                    'until'     => ($event->endsAt ?? $event->startsAt)->modify(self::AFTERMATH)->format('Y-m-d H:i:s'),
+                    'start'     => $event->startsAt->format('Y-m-d H:i:s'),
+                    'pattern'   => implode('|', $patterns),
                 ],
             ));
         }
@@ -237,6 +266,27 @@ final readonly class ForkTripFinder
         usort($mail, static fn (array $a, array $b): int => $b['receivedAt'] <=> $a['receivedAt']);
 
         return array_slice($mail, 0, self::MAX_MAIL);
+    }
+
+    /**
+     * The earliest a mail naming the trip's number can be about it: a few days
+     * before the first mail the event was read from (its booking), or, for an
+     * event no mail made, a season before it starts.
+     *
+     * @param list<array<string, mixed>> $linked
+     */
+    private function numberedMailSince(CalendarEvent $event, array $linked): DateTimeImmutable
+    {
+        $dates = array_filter(array_map(
+            static fn (array $row): ?string => null === $row['received_at'] ? null : (string) $row['received_at'],
+            $linked,
+        ));
+
+        if ([] === $dates) {
+            return ($event->startsAt ?? new DateTimeImmutable())->modify(self::UNBOOKED_LOOKBACK);
+        }
+
+        return new DateTimeImmutable(min($dates))->modify(self::BEFORE_BOOKING);
     }
 
     /**
