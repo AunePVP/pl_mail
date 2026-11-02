@@ -8,3 +8,13 @@ message:
         label: "Se désabonner"
         hint_link: "Ouvre la page de désabonnement de l'expéditeur dans un nouvel onglet"
         hint_mail: "Ouvre un message vers l'adresse de désabonnement de l'expéditeur"
+search:
+    fork_insight:
+        trips_heading: "À venir"
+        untitled: "Sans titre"
+        offer: "Suggestion"
+        offer_hint: "Lu dans un message, pas encore dans l’agenda. Ouvrez le message pour l’ajouter."
+        mail_count: "{0} aucun message|{1} 1 message|]1,Inf[ %count% messages"
+        loading: "L’IA lit les résultats …"
+        answer_heading: "En bref"
+        disclaimer: "Résumé par l’IA à partir des premiers résultats – en cas de doute, ouvrez le message."

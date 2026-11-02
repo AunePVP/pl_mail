@@ -8,3 +8,13 @@ message:
         label: "Abandon ship"
         hint_link: "Opens the sender's unsubscribe page in a fresh tab"
         hint_mail: "Opens a letter to the sender's unsubscribe address"
+search:
+    fork_insight:
+        trips_heading: "On the horizon"
+        untitled: "Nameless"
+        offer: "Spotted"
+        offer_hint: "Read from a letter, not yet in yer log. Open the letter to add it."
+        mail_count: "{0} no letters|{1} 1 letter|]1,Inf[ %count% letters"
+        loading: "The parrot be readin' the haul …"
+        answer_heading: "In short, matey"
+        disclaimer: "Summed up by the parrot from the first finds – when in doubt, open the letter."

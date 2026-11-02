@@ -1,0 +1,56 @@
+{# FORK (FORK.md): the chat model's answer above the search results. See ForkSearchAnswer. #}
+<turbo-frame id="fork-search-answer" target="_top">
+    {% if answer is not null %}
+        <div class="px-4 py-2.5" data-fork-answer-state="ready">
+            <div class="rounded-md border border-accent/20 bg-accent-soft/40 px-3 py-2">
+                <p class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-accent mb-1">
+                    <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                    {{ 'search.fork_insight.answer_heading'|trans({}, 'fork') }}
+                </p>
+
+                {% if answer.text %}
+                    <p class="text-sm text-ink" data-fork-answer-text>{{ answer.text }}</p>
+                {% endif %}
+
+                {% if answer.important is not empty %}
+                    <ul class="mt-1.5 space-y-0.5" data-fork-answer-important>
+                        {% for thread in answer.important %}
+                            <li class="text-xs truncate">
+                                <i class="fa-solid fa-arrow-right text-accent text-[10px] mr-1" aria-hidden="true"></i>
+                                <a href="{{ path('app_mail_thread', { id: thread.id }) }}" class="text-ink-soft hover:text-accent hover:underline">
+                                    <span class="text-ink-faint">{{ thread.lastMessageAt ? thread.lastMessageAt|intl_date('dMMM') : '' }}</span>
+                                    {{ thread.subject|default('—') }}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+
+                {% if answer.groups is not empty %}
+                    <div class="mt-2 space-y-1" data-fork-answer-groups>
+                        {% for group in answer.groups %}
+                            <details class="text-xs">
+                                <summary class="cursor-pointer text-ink-muted hover:text-ink">
+                                    <span class="font-medium">{{ group.title }}</span>
+                                    · {{ 'search.fork_insight.mail_count'|trans({ '%count%': group.threads|length }, 'fork') }}
+                                </summary>
+                                <ul class="mt-0.5 pl-4 space-y-0.5">
+                                    {% for thread in group.threads %}
+                                        <li class="truncate">
+                                            <a href="{{ path('app_mail_thread', { id: thread.id }) }}" class="text-ink-soft hover:text-accent hover:underline">
+                                                <span class="text-ink-faint">{{ thread.lastMessageAt ? thread.lastMessageAt|intl_date('dMMM') : '' }}</span>
+                                                {{ thread.subject|default('—') }}
+                                            </a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            </details>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <p class="text-[10px] text-ink-faint mt-1.5">{{ 'search.fork_insight.disclaimer'|trans({}, 'fork') }}</p>
+            </div>
+        </div>
+    {% endif %}
+</turbo-frame>

@@ -241,6 +241,118 @@ Schlüssel `message.fork_unsubscribe.*` in `translations/fork.*.yaml`, Tests
 (2026-11-02) hatten 5 153 von 48 633 Mails den Header, 5 133 davon mit brauchbarem Ziel.
 **Kandidat fürs Original:** ja, als Funktion (dort erst Issue, nur nach Freigabe).
 
+### 14. Buchungszeiten ohne Zeitzone sind Ortszeit
+
+schema.org-Zeiten ohne Offset (`"2026-03-12T18:10:00"`) liest der Extractor als Uhrzeit in der
+Zeitzone des Nutzers statt als UTC, aber nur, wenn im ganzen Knoten keine einzige Zeit einen Offset
+hat. Ganztägiges (Hotel mit reinem Datum) bleibt unverändert. Der Dedup-Schlüssel bleibt gleich (er
+nimmt das Datum vom Zifferblatt), also korrigiert `app:backfill events` vorhandene Termine, statt sie
+zu verdoppeln.
+
+Neue Dateien: `src/Service/Fork/ForkFloatingTime.php`, Test `tests/Service/Fork/ForkFloatingTimeTest.php`.
+
+Änderung an einer Datei des Originals (mit `FORK (FORK.md)` markiert):
+
+- `src/Service/Calendar/Extraction/StructuredDataEventExtractor.php`: optionaler
+  Konstruktorparameter `?UserTimezoneResolver`, in `extract()` vor `toExtractedEvent()` der Aufruf
+  `ForkFloatingTime::localised()`.
+
+**Datenbank:** keine Änderung.
+
+**Grund:** Booking.com schickt Flugzeiten ohne Offset (Google: dann Ortszeit des Flughafens).
+Ein Abflug um 18:10 stand in der Produktion (2026-11-02) um 19:10 im Kalender. Die Zone
+des Flughafens steht nicht im Markup; die Zone des Nutzers ist für alle Reisen richtig, die in ihr
+beginnen, und nie schlechter als UTC.
+**Kandidat fürs Original:** ja (dort erst Issue, nur nach Freigabe).
+
+### 15. Reisebuchungen ohne Markup liest das Sprachmodell
+
+Ein weiterer Extractor `ForkLlmTravelExtractor` (Priorität 10, also nach ICS und JSON-LD) fragt das
+Schreib-Modell nach Flügen, Zügen, Bussen, Hotels, Mietwagen und Tickets – aber nur bei Mail ohne
+Kalenderteil und ohne JSON-LD, nicht in Werbung/Foren, nur wenn Betreff oder Text ein Reisewort
+enthalten und der Schalter „Einsortieren“ (`AiFeature::Categorise`) an ist. Jeder Fund muss belegt
+sein: Zitat, Flug-/Zugnummer, Buchungsnummer und Uhrzeit müssen wörtlich in der Mail stehen, sonst
+wird er verworfen. Die Antwort wird pro Mail 30 Tage gecacht („Änderung übernehmen“ liest neu und
+soll dasselbe sehen). Dedup-Schlüssel: Flug/Zug/Bus = Nummer + Ortsdatum (dieselbe Maschine aus
+Agentur- und Airline-Mail ist ein Termin), sonst Absender-Domain + Buchungsnummer bzw. Startzeit.
+
+Die Funde sind `EventSource::Llm` (vom Original für genau diesen Zweck angelegt, `isTrusted()` =
+false) und landen **nur als Angebot** auf der Karte über der Mail („In den Kalender?“), nie
+ungefragt im Kalender, auch nicht bei DKIM/DMARC-geprüftem Absender; eine spätere Mail ändert einen
+solchen Termin nur nach Klick.
+
+Für Mail, die schon da ist: `php bin/console app:fork:llm-events --since=2026-09-01` (`--dry-run`
+zählt nur). Läuft inline über `ExtractEventsHandler`, wiederholbar.
+
+Neue Dateien: `src/Service/Fork/Calendar/ForkLlmTravelExtractor.php`,
+`src/Command/Fork/ForkLlmEventsCommand.php`, Test `tests/Service/Fork/ForkLlmTravelExtractorTest.php`.
+Eine Zeile für den Befehl in der Befehlstabelle von `CONTRIBUTING.md` (verlangt
+`DocumentationCoverageTest`).
+
+Änderungen an Dateien des Originals (mit `FORK (FORK.md)` markiert):
+
+- `src/Service/Calendar/EventReconciler.php`: in `isOfferedByMail()` und `mayApplyUnasked()` je
+  eine Abfrage `$claim->source->isTrusted()` vorneweg. Das Original beschreibt dieses Verhalten für
+  nicht vertrauenswürdige Quellen in `EventSource::isTrusted()`, setzt es im Reconciler aber nicht
+  um (bisher gab es keine solche Quelle).
+
+**Datenbank:** keine Änderung (Cache im normalen Symfony-Cache).
+
+**Grund:** Trip.com, Parkplatz- und Security-Slot-Buchungen, Airlines (Check-in, Gate), Hotels schicken kein JSON-LD;
+diese Buchungen kamen nie in den Kalender. Gemessen gegen Qwen auf dem Spark (2026-11-02, Reasoning
+aus): ~5 s pro Reisemail, < 1 s für Werbung; Agentur-, Slot- und Gate-Mails richtig gelesen.
+**Kandidat fürs Original:** als Idee ja (dort erst Issue, nur nach Freigabe); der Reconciler-Teil
+allein ist eine Fehlerbehebung für die künftige Llm-Quelle.
+
+### 16. Suche: kommende Termine und KI-Antwort über den Treffern
+
+Auf der ersten Seite einer Suche mit Suchwörtern stehen über der Trefferliste zwei Felder, jedes ein
+eigener Turbo-Frame mit `loading="lazy"`; die Liste wartet auf keins davon.
+
+- **Termine dazu** (`ForkTripFinder`, ohne KI, Millisekunden): kommende Termine des Nutzers
+  (gestern bis +400 Tage, nicht abgesagt/abgelehnt), wenn das Suchwort die Art nennt („Flug“,
+  „Zug“, „Hotel“, „Paket“ … → `ExtractionKind`) oder im Titel/Ort steht. Darunter aufklappbar die
+  zugehörigen Mails: alle, aus denen der Termin gelesen wurde (`event_source_link`), plus Mails, deren
+  Betreff dieselbe Flug-/Zugnummer nennt (etwa eine Parkplatzbuchung zur selben Flugnummer). Nur angebotene Termine (Abweichung
+  15) sind als „Vorschlag“ markiert.
+- **Kurz gesagt** (`ForkSearchAnswer`, Schalter „Zusammenfassen“ = `AiFeature::Summary`): das
+  Schreib-Modell bekommt die ersten 20 Treffer (Betreff, Absender, Datum, markierter Ausschnitt –
+  nie ganze Mails) und die gefundenen Termine und antwortet mit 1–3 Sätzen, bis zu drei wichtigsten
+  Mails und Gruppen von Treffern zum selben Vorgang. Nur IDs aus den gegebenen Treffern werden
+  angezeigt. Cache 6 h pro Nutzer, Suchtext und Trefferstand.
+
+Neue Dateien: `src/Controller/Fork/ForkSearchInsightController.php` (Routen
+`/mail/search/fork/trips` und `/mail/search/fork/answer`), `src/Service/Fork/Search/ForkTripFinder.php`,
+`ForkTrip.php`, `ForkSearchAnswer.php`, `ForkAnswer.php`, `templates/fork/search/_insight.html.twig`,
+`_trips.html.twig`, `_answer.html.twig`, Schlüssel `search.fork_insight.*` in `translations/fork.*.yaml`,
+Test `tests/Controller/Fork/ForkSearchInsightTest.php`.
+
+Änderung an einer Datei des Originals (mit `FORK (FORK.md)` markiert):
+
+- `templates/search/search.html.twig`: ein `include` von `fork/search/_insight.html.twig` unter dem
+  Hinweis zur Suche nach Bedeutung.
+
+**Datenbank:** keine Änderung.
+
+**Grund:** Wer „Flug“ sucht, will seinen nächsten Flug sehen, nicht 284 Treffer, von denen acht zum
+selben Flug gehören. Gemessen gegen Qwen auf dem Spark (2026-11-02, Reasoning aus): 8 s für „Flug“
+mit 20 Treffern (~2 500 Tokens), drei richtige Gruppen.
+**Kandidat fürs Original:** als Idee (dort erst Issue, nur nach Freigabe).
+
+### 17. Zeichen, das über zwei MIME-Wörter geteilt ist
+
+`src/Domain/Helper/MimeHeaderHelper.php` (`run()`, mit `FORK (FORK.md)` markiert): benachbarte
+Encoded Words mit demselben Zeichensatz werden erst als Bytes aneinandergehängt und dann umgewandelt,
+statt Wort für Wort. Test: `tests/Domain/Helper/ForkMimeSplitCharacterTest.php`.
+
+**Datenbank:** keine Änderung. Schon gespeicherte Betreffs bleiben, wie sie sind (Produktion
+2026-11-02: 14 Mails, davon 10 von Booking.com).
+
+**Grund:** Booking.com teilt das „ä“ (`C3 A4`) zwischen zwei Base64-Wörtern
+(`…best\xC3?=` `=?UTF-8?B?\xA4tigt…`), was RFC 2047 §5 verbietet. Wort für Wort umgewandelt, wurde
+jede Hälfte als cp1252 „repariert“: „bestÃ¤tigt“.
+**Kandidat fürs Original:** ja, Fehlerbehebung (dort erst Issue, nur nach Freigabe).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,

@@ -84,6 +84,13 @@ final class MimeHeaderHelper
 
         $out = '';
 
+        // FORK (FORK.md): the bytes of neighbouring words in one charset are
+        // converted together. RFC 2047 §5 forbids splitting a character across
+        // two words, and Booking.com does it anyway ("best\xC3" | "\xA4tigt");
+        // converted word by word, each half was repaired as cp1252 into "Ã¤".
+        $pending        = '';
+        $pendingCharset = null;
+
         foreach ($words as $word) {
             [$whole, $charset, $encoding, $payload] = $word;
 
@@ -92,13 +99,24 @@ final class MimeHeaderHelper
                 // RFC 2047 §4.2: underscore is a space, everywhere in the word.
                 : quoted_printable_decode(str_replace('_', ' ', $payload));
 
+            if (null !== $pendingCharset && (false === $bytes || 0 !== strcasecmp($pendingCharset, $charset))) {
+                $out           .= CharsetHelper::toUtf8($pending, $pendingCharset);
+                $pending        = '';
+                $pendingCharset = null;
+            }
+
             if (false === $bytes) {
                 $out .= $whole;
 
                 continue;
             }
 
-            $out .= CharsetHelper::toUtf8($bytes, $charset);
+            $pending        .= $bytes;
+            $pendingCharset  = $charset;
+        }
+
+        if (null !== $pendingCharset) {
+            $out .= CharsetHelper::toUtf8($pending, $pendingCharset);
         }
 
         return $out;
