@@ -6,16 +6,10 @@ namespace App\Service\Fork\Search;
 
 use App\Domain\DTO\ParsedSearchQuery;
 use App\Entity\Ai\AiFeature;
-use App\Entity\Mail\MessageThread;
 use App\Entity\User\User;
-use App\Repository\Mail\MessageThreadRepository;
 use App\Service\Ai\AiAssistant;
-use App\Service\Ai\SemanticQuery;
-use App\Service\Search\SearchResultHighlights;
 use App\Service\User\UserTimezoneResolver;
 use DateTimeImmutable;
-use Doctrine\DBAL\ArrayParameterType;
-use Doctrine\DBAL\Connection;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 
@@ -36,7 +30,9 @@ use Symfony\Contracts\Cache\ItemInterface;
  *
  * What the model gets is what the page already shows: subject, sender, date
  * and the highlighted fragment of each result, never whole bodies — fast, and
- * nothing the person has not already been shown. What comes back is trusted
+ * nothing the person has not already been shown. With a reranker
+ * (ForkReranker) those are the twenty it rates best out of fifty rather than
+ * simply the newest twenty. What comes back is trusted
  * for nothing but prose and ids, and an id that was not in the list it was
  * given is dropped.
  *
@@ -47,20 +43,15 @@ final readonly class ForkSearchAnswer
 {
     private const int RESULTS = 20;
 
-    private const int SNIPPET = 300;
-
     private const int CACHE_SECONDS = 21_600;
 
     private const float TEMPERATURE = 0.2;
 
     public function __construct(
-        private AiAssistant             $ai,
-        private SemanticQuery           $semantic,
-        private MessageThreadRepository $threads,
-        private SearchResultHighlights  $highlights,
-        private Connection              $connection,
-        private UserTimezoneResolver    $timezones,
-        private CacheInterface          $cache,
+        private AiAssistant          $ai,
+        private ForkSearchCandidates $candidates,
+        private UserTimezoneResolver $timezones,
+        private CacheInterface       $cache,
     ) {
     }
 
@@ -78,31 +69,29 @@ final readonly class ForkSearchAnswer
             return null;
         }
 
-        $semantic = $this->semantic->forQuery($user, $parsed->freeText);
-        $page     = $this->threads->searchPage($user, $parsed, 1, self::RESULTS, sort: $user->searchSortOrder, semantic: $semantic);
-        $threads  = array_values(array_filter($page->threads, static fn (mixed $t): bool => $t instanceof MessageThread && null !== $t->id));
+        $candidates = array_slice($this->candidates->for($user, $parsed, $raw), 0, self::RESULTS);
 
-        if ([] === $threads) {
+        if ([] === $candidates) {
             return null;
         }
 
         $byId = [];
 
-        foreach ($threads as $thread) {
-            $byId[(int) $thread->id] = $thread;
+        foreach ($candidates as $candidate) {
+            $byId[(int) $candidate->thread->id] = $candidate->thread;
         }
 
         $key = 'fork_search_answer_' . hash('sha256', implode("\0", [
             (string) $user->id,
             $raw,
-            implode(',', array_map(static fn (MessageThread $t): string => $t->id . '@' . $t->lastMessageAt?->getTimestamp(), $threads)),
+            implode(',', array_map(static fn (ForkCandidate $c): string => $c->thread->id . '@' . $c->thread->lastMessageAt?->getTimestamp(), $candidates)),
             implode(',', array_map(static fn (ForkTrip $t): string => $t->event->id . '@' . $t->event->startsAt?->getTimestamp(), $trips)),
         ]));
 
-        $decoded = $this->cache->get($key, function (ItemInterface $item) use ($user, $raw, $threads, $parsed, $trips): ?array {
+        $decoded = $this->cache->get($key, function (ItemInterface $item) use ($user, $raw, $candidates, $trips): ?array {
             $item->expiresAfter(self::CACHE_SECONDS);
 
-            $decoded = $this->ask($user, $raw, $threads, $parsed, $trips);
+            $decoded = $this->ask($user, $raw, $candidates, $trips);
 
             if (null === $decoded) {
                 $item->expiresAfter(1);
@@ -153,30 +142,27 @@ final readonly class ForkSearchAnswer
     }
 
     /**
-     * @param list<MessageThread> $threads
+     * @param list<ForkCandidate> $candidates
      * @param list<ForkTrip>      $trips
      *
      * @return array<string, mixed>|null
      */
-    private function ask(User $user, string $raw, array $threads, ParsedSearchQuery $parsed, array $trips): ?array
+    private function ask(User $user, string $raw, array $candidates, array $trips): ?array
     {
-        $zone       = $this->timezones->resolve($user);
-        $highlights = $this->highlights->forPage($threads, $parsed->freeText);
-        $senders    = $this->senders($threads);
-        $language   = str_starts_with(mb_strtolower((string) ($user->locale ?? 'de')), 'en') ? 'English' : 'German';
+        $zone     = $this->timezones->resolve($user);
+        $language = str_starts_with(mb_strtolower((string) ($user->locale ?? 'de')), 'en') ? 'English' : 'German';
 
         $results = [];
 
-        foreach ($threads as $thread) {
-            $id      = (int) $thread->id;
-            $snippet = $highlights[$id]['snippet'] ?? null;
+        foreach ($candidates as $candidate) {
+            $thread = $candidate->thread;
 
             $results[] = [
-                'id'      => $id,
+                'id'      => (int) $thread->id,
                 'date'    => $thread->lastMessageAt?->setTimezone($zone)->format('Y-m-d'),
-                'from'    => $senders[$id] ?? null,
+                'from'    => $candidate->sender,
                 'subject' => trim((string) $thread->subject),
-                'text'    => null === $snippet ? null : mb_substr(trim(html_entity_decode(strip_tags((string) $snippet))), 0, self::SNIPPET),
+                'text'    => $candidate->snippet,
                 'mails'   => $thread->messageCount,
             ];
         }
@@ -191,7 +177,7 @@ final readonly class ForkSearchAnswer
         ], $trips);
 
         $system = <<<PROMPT
-            You help somebody who searched their own mailbox. You get what they typed, today's date, matching entries from their calendar, and the first search results (newest or most relevant first). Answer with ONE JSON object and nothing else:
+            You help somebody who searched their own mailbox. You get what they typed, today's date, matching entries from their calendar, and the first search results (most relevant first). Answer with ONE JSON object and nothing else:
             {"answer": "...", "important": [ids], "groups": [{"title": "...", "ids": [ids]}]}
 
             - answer: one to three short sentences in {$language} that answer what they most likely want to know, with the concrete facts (dates, times, flight numbers, amounts) found in the data. Prefer what lies ahead over what is past, name things in the order they happen, and do not call anything an outbound or return trip unless the data says so. No greeting, no advice, nothing that is not in the data. Empty string if the data answers nothing.
@@ -226,32 +212,5 @@ final readonly class ForkSearchAnswer
         $decoded = json_decode(substr($raw, $start, $end - $start + 1), true);
 
         return true === is_array($decoded) ? $decoded : ['answer' => '', 'important' => [], 'groups' => []];
-    }
-
-    /**
-     * The sender of each thread's newest message.
-     *
-     * @param list<MessageThread> $threads
-     *
-     * @return array<int, string>
-     */
-    private function senders(array $threads): array
-    {
-        $rows = $this->connection->fetchAllAssociative(
-            'SELECT DISTINCT ON (thread_id) thread_id, coalesce(nullif(from_name, \'\'), from_address) AS sender
-               FROM message
-              WHERE thread_id IN (:ids)
-              ORDER BY thread_id, received_at DESC NULLS LAST',
-            ['ids' => array_map(static fn (MessageThread $t): int => (int) $t->id, $threads)],
-            ['ids' => ArrayParameterType::INTEGER],
-        );
-
-        $senders = [];
-
-        foreach ($rows as $row) {
-            $senders[(int) $row['thread_id']] = trim((string) $row['sender']);
-        }
-
-        return $senders;
     }
 }

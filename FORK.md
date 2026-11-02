@@ -353,6 +353,32 @@ statt Wort für Wort. Test: `tests/Domain/Helper/ForkMimeSplitCharacterTest.php`
 jede Hälfte als cp1252 „repariert“: „bestÃ¤tigt“.
 **Kandidat fürs Original:** ja, Fehlerbehebung (dort erst Issue, nur nach Freigabe).
 
+### 18. Reranker für die Suche (`FORK_RERANK_URL`)
+
+Umgebungsvariable **`FORK_RERANK_URL`**: volle Adresse eines `/rerank`-Endpoints im Cohere/Jina-Format
+(POST `{query, documents, top_n, instruction}`, Antwort `{results: [{index, relevance_score}]}`), z. B.
+Qwen3-Reranker-0.6B. Leer oder nicht gesetzt = aus, alles wie in Abweichung 16. Gesetzt wird sie in
+der Unraid-Vorlage; die Adresse muss **aus dem plmail-Container** erreichbar sein (LAN-IP bzw.
+Docker-Gateway, nicht `*.local`). Timeout 4 s; jeder Fehler heißt „ohne Ranking“.
+
+- `ForkSearchCandidates` holt die ersten 50 Treffer der Suche (wie die Liste, als angemeldeter
+  Nutzer), lässt sie vom Reranker bewerten (Absender, Datum, Betreff, markierter Ausschnitt) und
+  sortiert nach Score, mild nach Alter gewichtet (höchstens halbiert, Halbwertszeit grob 2 Monate).
+  Ergebnis 10 min gecacht, damit beide Felder es nur einmal kosten.
+- Neues Feld **„Beste Treffer“** (Frame `fork-search-best`, Route `/mail/search/fork/best`): bis zu 3
+  Treffer mit Score ≥ 0,5, nach ~1 s.
+- **„Kurz gesagt“** bekommt die 20 besten statt der 20 neuesten Treffer.
+
+Neue Dateien: `src/Service/Fork/Search/ForkReranker.php`, `ForkSearchCandidates.php`,
+`ForkCandidate.php`, `templates/fork/search/_best.html.twig`, Schlüssel
+`search.fork_insight.best_heading`, Test `tests/Controller/Fork/ForkSearchRerankTest.php`. Geändert
+(nur Fork-Dateien): `ForkSearchAnswer`, `ForkSearchInsightController`, `_insight.html.twig`.
+
+**Datenbank:** keine Änderung.
+
+**Grund:** Gemessen mit dem Reranker auf der Arc A380 (2026-11-02): 1,0 s für 50 Treffer zu „Flug“;
+erkennt Buchungsmails, achtet aber nicht aufs Datum (deshalb die Altersgewichtung).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,

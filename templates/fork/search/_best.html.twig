@@ -1,0 +1,26 @@
+{# FORK (FORK.md): the results the reranker rates as clearly what was asked for. See ForkReranker. #}
+<turbo-frame id="fork-search-best" target="_top">
+    {% if best is not empty %}
+        <div class="px-4 pt-2.5 pb-1" data-fork-best>
+            <p class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint mb-1.5">
+                <i class="fa-solid fa-ranking-star" aria-hidden="true"></i>
+                {{ 'search.fork_insight.best_heading'|trans({}, 'fork') }}
+            </p>
+            <ul class="space-y-1">
+                {% for candidate in best %}
+                    {% set thread = candidate.thread %}
+                    <li class="rounded-md border border-line px-3 py-1.5 text-sm" data-fork-best-row="{{ thread.id }}">
+                        <a href="{{ path('app_mail_thread', { id: thread.id }) }}" class="flex items-baseline gap-2 min-w-0 hover:text-accent">
+                            <span class="font-medium text-ink truncate">{{ thread.subject|default('—') }}</span>
+                            <span class="text-xs text-ink-muted truncate flex-shrink min-w-0">{{ candidate.sender }}</span>
+                            <span class="ml-auto text-xs text-ink-faint flex-shrink-0">{{ thread.lastMessageAt ? thread.lastMessageAt|intl_date('dMMM') : '' }}</span>
+                        </a>
+                        {% if candidate.snippet %}
+                            <p class="text-xs text-ink-muted truncate mt-0.5">{{ candidate.snippet }}</p>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+</turbo-frame>

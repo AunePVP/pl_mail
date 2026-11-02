@@ -10,6 +10,7 @@ message:
         hint_mail: "Öffnet eine Mail an die Abmeldeadresse des Absenders"
 search:
     fork_insight:
+        best_heading: "Beste Treffer"
         trips_heading: "Termine dazu"
         untitled: "Ohne Titel"
         offer: "Vorschlag"

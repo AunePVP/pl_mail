@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Controller\Fork;
 
 use App\Entity\User\User;
+use App\Service\Fork\Search\ForkReranker;
 use App\Service\Fork\Search\ForkSearchAnswer;
+use App\Service\Fork\Search\ForkSearchCandidates;
 use App\Service\Fork\Search\ForkTripFinder;
 use App\Service\Search\SearchQueryParser;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -16,12 +18,13 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
 
 /**
- * FORK (FORK.md): the two panels above the search results, each a lazy
+ * FORK (FORK.md): the panels above the search results, each a lazy
  * turbo-frame of its own (templates/fork/search/_insight.html.twig).
  *
- * Two frames rather than one, because they cost different amounts of time.
- * The coming events are a query and arrive with the page; the answer is the
- * chat model and takes seconds. In one frame the events would wait for it.
+ * Separate frames rather than one, because they cost different amounts of
+ * time. The coming events are a query and arrive with the page; the best
+ * results are a small reranker and take about a second; the answer is the
+ * chat model and takes several. In one frame each would wait for the slowest.
  *
  * Both re-read the query from the URL and run as the signed-in user, so
  * neither can show anything the results list could not.
@@ -30,11 +33,53 @@ use Symfony\Component\Security\Http\Attribute\CurrentUser;
 #[IsGranted('IS_AUTHENTICATED')]
 final class ForkSearchInsightController extends AbstractController
 {
+    /**
+     * Qwen3-Reranker's score is a probability of "yes, this matches": a real
+     * match sits near 0.9, a near miss near 0.05. Half is the line between.
+     */
+    private const float BEST_SCORE = 0.5;
+
+    private const int BEST_COUNT = 3;
+
     public function __construct(
         private readonly SearchQueryParser $parser,
         private readonly ForkTripFinder    $trips,
         private readonly ForkSearchAnswer  $answers,
+        private readonly ForkReranker      $reranker,
+        private readonly ForkSearchCandidates $candidates,
     ) {
+    }
+
+    /**
+     * The results the reranker rates as clearly what was asked for — the
+     * mail somebody was looking for, before the chat model has read anything.
+     * Nothing at all without a reranker: the search's own first rows are
+     * already the first rows of the list underneath.
+     */
+    #[Route('/best', name: 'best', methods: ['GET'])]
+    public function best(Request $request, #[CurrentUser] User $user): Response
+    {
+        $this->releaseSession($request);
+
+        $raw    = trim($request->query->getString('q'));
+        $parsed = $this->parser->parse($raw);
+        $best   = [];
+
+        if ('' !== $parsed->freeText && true === $this->reranker->isAvailable()) {
+            foreach ($this->candidates->for($user, $parsed, $raw) as $candidate) {
+                // Unranked is the tail; the ranked part is ordered with age
+                // weighed in, so a weak one can sit before a strong one.
+                if (null === $candidate->score || self::BEST_COUNT <= count($best)) {
+                    break;
+                }
+
+                if (self::BEST_SCORE <= $candidate->score) {
+                    $best[] = $candidate;
+                }
+            }
+        }
+
+        return $this->render('fork/search/_best.html.twig', ['best' => $best]);
     }
 
     #[Route('/trips', name: 'trips', methods: ['GET'])]
