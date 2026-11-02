@@ -152,6 +152,20 @@ final class ForkSearchRerankTest extends WebTestCase
         self::assertSelectorNotExists('[data-fork-best]');
     }
 
+    /** The answer's stream and its reload come seconds later; neither waits for a dead reranker again. */
+    public function testAFailureIsRememberedForTheSearch(): void
+    {
+        $this->seedThread('Flug XY1234 Buchungsbestätigung', '-3 days');
+        $this->rerankerDown = true;
+
+        $this->client->request('GET', '/mail/search/fork/best?q=Flug');
+        // Longer than the one second a failure used to be kept.
+        usleep(1_200_000);
+        $this->client->request('GET', '/mail/search/fork/best?q=Flug');
+
+        self::assertCount(1, $this->reranked);
+    }
+
     /** The answer's twenty are the reranker's best, not the newest, and the ranking is asked for once. */
     public function testTheModelReadsTheRerankedOrder(): void
     {
