@@ -275,6 +275,12 @@ sein: Zitat, Flug-/Zugnummer, Buchungsnummer und Uhrzeit müssen wörtlich in de
 wird er verworfen. Die Antwort wird pro Mail 30 Tage gecacht („Änderung übernehmen“ liest neu und
 soll dasselbe sehen). Dedup-Schlüssel: Flug/Zug/Bus = Nummer + Ortsdatum (dieselbe Maschine aus
 Agentur- und Airline-Mail ist ein Termin), sonst Absender-Domain + Buchungsnummer bzw. Startzeit.
+Eine nackte Flugnummer („1051“) bekommt das Kürzel, das in der Mail (sonst im Titel des Modells)
+direkt davor steht. Kein Vorschlag, wenn derselbe Termin (gleiche Art, gleiche Startzeit) schon aus
+einer verlässlichen Quelle im Kalender des Nutzers steht (Booking.com: Bestätigung mit Markup, dann
+„Buchungsinformationen“ ohne), und keiner für eine Reise, die seit über einem Tag vorbei ist – hier
+gegen *jetzt* (Symfony Clock), nicht gegen das Mail-Datum, sonst bietet das Nachlesen alter Mail den
+Urlaub vom letzten Sommer an.
 
 Die Funde sind `EventSource::Llm` (vom Original für genau diesen Zweck angelegt, `isTrusted()` =
 false) und landen **nur als Angebot** auf der Karte über der Mail („In den Kalender?“), nie
