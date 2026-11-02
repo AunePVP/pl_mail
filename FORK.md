@@ -72,7 +72,12 @@ geplant auf einem amd64-Host (Unraid). Image: `ghcr.io/aunepvp/pl_mail:main` bzw
 In den Actions-Einstellungen des Forks deaktiviert: `pages.yml`, `wiki.yml`,
 `close-milestone-issues.yml`, `pr-hygiene.yml`. Sie gehören zur Projektpflege des Originals
 (Website, Wiki, Meilensteine, Pflicht-Issue je PR) und würden im Fork nur fehlschlagen oder PRs
-blockieren. Aktiv bleiben `docker.yml` (Image) und `e2e.yml` (Unit- und Browsertests bei jedem PR).
+blockieren.
+
+Seit 2026-11-02 ebenfalls deaktiviert: `e2e.yml` (PHPUnit und Playwright, ca. 15–17 min pro PR).
+Stattdessen laufen PHPUnit und PHPStan vor jedem Merge lokal (CLAUDE.md → Arbeitsweise). Für einen
+Lauf in der CI, etwa bei einem größeren Update vom Original: Actions → E2E → „Enable workflow“, dann
+„Run workflow“ auf dem Branch, danach wieder „Disable workflow“. Aktiv bleibt nur `docker.yml` (Image).
 
 ### 6. Anleitungen für KI-Assistenten
 
@@ -138,7 +143,8 @@ git merge vX.Y.Z
    Abweichung selbst gelöst, die Fork-Stelle entfernen und hier austragen.
 2. `git diff vX.Y.Z -- $(git grep -l "FORK (FORK.md)")` ansehen: Sind alle Abweichungen noch da und
    passen sie zum neuen Code drumherum?
-3. Push, Pull Request gegen `main` des Forks, Tests (e2e.yml) abwarten, dann **mit Merge-Commit**
+3. Tests lokal (PHPUnit, PHPStan; bei großen Updates auch Playwright oder e2e.yml von Hand, siehe
+   Abweichung 5). Push, Pull Request gegen `main` des Forks, dann **mit Merge-Commit**
    mergen (`gh pr merge --merge`), nie per Squash: sonst erkennt Git die Commits des Originals beim
    nächsten Update nicht wieder. Der Merge baut das Image.
 4. Auf dem Server das neue Image ziehen. Migrationen laufen beim Start automatisch; vorher ein
