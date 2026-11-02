@@ -10,6 +10,7 @@ message:
         hint_mail: "Opens a letter to the sender's unsubscribe address"
 search:
     fork_insight:
+        best_heading: "Finest plunder"
         trips_heading: "On the horizon"
         untitled: "Nameless"
         offer: "Spotted"
