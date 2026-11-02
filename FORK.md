@@ -324,6 +324,16 @@ eigener Turbo-Frame mit `loading="lazy"`; die Liste wartet auf keins davon.
   zugehörigen Mails: alle, aus denen der Termin gelesen wurde (`event_source_link`), plus Mails, deren
   Betreff dieselbe Flug-/Zugnummer nennt (etwa eine Parkplatzbuchung zur selben Flugnummer). Nur angebotene Termine (Abweichung
   15) sind als „Vorschlag“ markiert.
+  Eine Flugnummer fliegt jede Woche, deshalb gehört eine Mail per Nummer nur dann zum Termin, wenn sie
+  frühestens 7 Tage vor seiner ersten eigenen Mail (der Buchung; ohne eigene Mail 90 Tage vor Beginn)
+  und spätestens 2 Tage nach seinem Ende kam, an keinem anderen Termin hängt und kein anderer Termin
+  mit derselben Nummer zwischen ihr und diesem liegt. Sonst hing die Slot&Fly-Buchung vom April am
+  Flug im Dezember.
+- Die Links in allen drei Feldern öffnen die Mail wie eine Zeile der Liste
+  (`data-action="click->mail--mail-pane#open"`); die Frame-Platzhalter tragen `target="_top"`.
+  Vorher navigierte ein Klick den Lazy-Frame selbst (Turbo übernimmt nur den *Inhalt* des
+  geladenen Frames, nicht dessen `target`), und die Seite blieb weiß bis zum Neuladen. Browsertest
+  `tests/e2e/fork-search-trips.spec.ts`.
 - **Kurz gesagt** (`ForkSearchAnswer`, Schalter „Zusammenfassen“ = `AiFeature::Summary`): das
   Schreib-Modell bekommt die ersten 20 Treffer (Betreff, Absender, Datum, markierter Ausschnitt –
   nie ganze Mails) und die gefundenen Termine und antwortet mit 1–3 Sätzen, bis zu drei wichtigsten

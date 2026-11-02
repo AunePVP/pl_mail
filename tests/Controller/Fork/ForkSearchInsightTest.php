@@ -11,6 +11,7 @@ use App\Domain\Enum\Mail\MessageCategory;
 use App\Domain\Enum\Mail\ThreadingMethod;
 use App\Entity\Ai\AiSettings;
 use App\Entity\Calendar\CalendarEvent;
+use App\Entity\Calendar\EventSourceLink;
 use App\Entity\Mail\Message;
 use App\Entity\Mail\MessageThread;
 use App\Service\Calendar\CalendarProvisioner;
@@ -105,6 +106,63 @@ final class ForkSearchInsightTest extends WebTestCase
         self::assertSelectorTextNotContains('[data-fork-trip]', 'Paket');
     }
 
+    /** April's parking booking names December's flight number, and is April's. */
+    public function testAnOldBookingOfTheSameNumberIsNotThisTrip(): void
+    {
+        $trip = $this->seedEvent('XY1234 FRA → LIS', ExtractionKind::Flight, '+60 days');
+        $this->link($trip, $this->seedThread('Ihre Flugbuchung nach Lissabon ist bestätigt', '-20 days'));
+        $this->seedThread('Ihre Parkplatzbuchung für den Flug XY 1234 (alt)', '-200 days');
+        $this->seedThread('Ihre Parkplatzbuchung für den Flug XY 1234', '-3 days');
+
+        $this->client->request('GET', '/mail/search/fork/trips?q=Flug');
+
+        self::assertSelectorTextContains('[data-fork-trip]', 'Flugbuchung nach Lissabon');
+        self::assertSelectorTextContains('[data-fork-trip]', 'Parkplatzbuchung für den Flug XY 1234');
+        self::assertSelectorTextNotContains('[data-fork-trip]', '(alt)');
+    }
+
+    /** The same flight a week apart: the parking mail is the first one's. */
+    public function testOfTwoFlightsWithOneNumberTheMailGoesToTheNearer(): void
+    {
+        $first  = $this->seedEvent('XY1234 FRA → LIS', ExtractionKind::Flight, '+10 days');
+        $second = $this->seedEvent('XY1234 FRA → LIS', ExtractionKind::Flight, '+17 days');
+        $this->seedThread('Ihre Parkplatzbuchung für den Flug XY 1234');
+
+        $this->client->request('GET', '/mail/search/fork/trips?q=Flug');
+
+        self::assertSelectorTextContains(sprintf('[data-fork-trip="%d"]', $first->id), 'Parkplatzbuchung');
+        self::assertSelectorTextNotContains(sprintf('[data-fork-trip="%d"]', $second->id), 'Parkplatzbuchung');
+    }
+
+    /** A mail another event was read from is that event's, whatever its subject says. */
+    public function testAMailOfAnotherEventIsNotThisTrips(): void
+    {
+        $this->seedEvent('XY1234 FRA → LIS', ExtractionKind::Flight, '+10 days');
+        $other = $this->seedEvent('Parken Terminal 1', ExtractionKind::Flight, '+10 days');
+        $this->link($other, $this->seedThread('Ihre Parkplatzbuchung für den Flug XY 1234'));
+
+        $crawler = $this->client->request('GET', '/mail/search/fork/trips?q=XY1234');
+
+        self::assertSame(0, $crawler->filter('[data-fork-trip]')->reduce(
+            static fn ($trip): bool => str_contains($trip->text(), 'XY1234 FRA') && str_contains($trip->text(), 'Parkplatz'),
+        )->count());
+    }
+
+    /** Opened like a row of the list, not by navigating the frame it sits in. */
+    public function testTheMailLinksOpenInThePane(): void
+    {
+        $this->seedEvent('XY1234 FRA → LIS', ExtractionKind::Flight, '+10 days');
+        $this->seedThread('Ihre Parkplatzbuchung für den Flug XY 1234');
+
+        $this->client->request('GET', '/mail/search/fork/trips?q=Flug');
+
+        self::assertSelectorExists('[data-fork-trip] a[data-action="click->mail--mail-pane#open"]');
+
+        $this->client->request('GET', '/mail/search?q=Flug');
+
+        self::assertSelectorExists('turbo-frame#fork-search-trips[target="_top"]');
+    }
+
     public function testAPastFlightAndADeclinedOneAreNot(): void
     {
         $this->seedEvent('LH400 FRA → JFK', ExtractionKind::Flight, '-5 days');
@@ -194,14 +252,25 @@ final class ForkSearchInsightTest extends WebTestCase
         return $event;
     }
 
-    private function seedThread(string $subject): MessageThread
+    private function link(CalendarEvent $event, MessageThread $thread): void
+    {
+        $link            = new EventSourceLink();
+        $link->event     = $event;
+        $link->message   = $thread->messages->first() ?: null;
+        $link->extractor = 'structuredData';
+        $link->dedupKey  = uniqid('fork-', true);
+        $this->em->persist($link);
+        $this->em->flush();
+    }
+
+    private function seedThread(string $subject, string $when = '-2 hours'): MessageThread
     {
         $thread                    = new MessageThread();
         $thread->account           = $this->account;
         $thread->subject           = $subject;
         $thread->normalizedSubject = mb_strtolower($subject);
         $thread->threadingMethod   = ThreadingMethod::SubjectFallback;
-        $thread->lastMessageAt     = new DateTimeImmutable('-2 hours');
+        $thread->lastMessageAt     = new DateTimeImmutable($when);
         $thread->category          = MessageCategory::Updates;
         $thread->messageCount      = 1;
         $thread->unreadCount       = 0;
@@ -214,7 +283,7 @@ final class ForkSearchInsightTest extends WebTestCase
         $message->subject        = $subject;
         $message->fromAddress    = 'noreply@example.test';
         $message->fromName       = 'Example Travel';
-        $message->receivedAt     = new DateTimeImmutable('-2 hours');
+        $message->receivedAt     = new DateTimeImmutable($when);
         $message->sentAt         = $message->receivedAt;
         $message->seenAt         = $message->receivedAt;
         $message->flags          = [];
