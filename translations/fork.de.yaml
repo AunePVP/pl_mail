@@ -8,3 +8,13 @@ message:
         label: "Abmelden"
         hint_link: "Öffnet die Abmeldeseite des Absenders in einem neuen Tab"
         hint_mail: "Öffnet eine Mail an die Abmeldeadresse des Absenders"
+search:
+    fork_insight:
+        trips_heading: "Termine dazu"
+        untitled: "Ohne Titel"
+        offer: "Vorschlag"
+        offer_hint: "Aus einer Mail gelesen, noch nicht im Kalender. Zum Übernehmen die Mail öffnen."
+        mail_count: "{0} keine Mail|{1} 1 Mail|]1,Inf[ %count% Mails"
+        loading: "KI liest die Treffer …"
+        answer_heading: "Kurz gesagt"
+        disclaimer: "Von der KI aus den ersten Treffern zusammengefasst – im Zweifel die Mail öffnen."

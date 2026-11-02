@@ -411,6 +411,11 @@ final readonly class EventReconciler
      */
     private function mayApplyUnasked(CalendarEvent $event, ExtractedEvent $claim, Message $message): bool
     {
+        // FORK (FORK.md): a guess (EventSource::Llm) never changes an event unasked.
+        if (false === $claim->source->isTrusted()) {
+            return false;
+        }
+
         $verdict = $this->authentication->verdict($message);
 
         if (SenderVerdict::Fail === $verdict) {
@@ -527,6 +532,11 @@ final readonly class EventReconciler
     {
         if (null !== $event->id && null === $event->myParticipation) {
             return false;
+        }
+
+        // FORK (FORK.md): a guess (EventSource::Llm) is always an offer, whoever sent it.
+        if (false === $claim->source->isTrusted()) {
+            return true;
         }
 
         $owned   = OwnAddressHelper::forMessage($message);

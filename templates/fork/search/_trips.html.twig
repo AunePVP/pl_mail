@@ -1,0 +1,52 @@
+{# FORK (FORK.md): the coming events a search is about, each with its mail. See ForkTripFinder. #}
+<turbo-frame id="fork-search-trips" target="_top">
+    {% if trips is not empty %}
+        <div class="px-4 pt-2.5 pb-1" data-fork-trips>
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-ink-faint mb-1.5">
+                {{ 'search.fork_insight.trips_heading'|trans({}, 'fork') }}
+            </p>
+            <ul class="space-y-1.5">
+                {% for trip in trips %}
+                    {% set event = trip.event %}
+                    <li class="rounded-md border border-line bg-sunken/60 px-3 py-2" data-fork-trip="{{ event.id }}">
+                        <details>
+                            <summary class="flex items-center gap-2 cursor-pointer list-none text-sm">
+                                <i class="{{ event.kind ? event.kind.icon : 'fa-regular fa-calendar' }} text-accent w-4 text-center" aria-hidden="true"></i>
+                                <span class="font-medium text-ink truncate">{{ event.title|default('search.fork_insight.untitled'|trans({}, 'fork')) }}</span>
+                                <span class="text-ink-muted flex-shrink-0">
+                                    {{ event.startsAt|intl_date('EEEdMMM') }}{% if not event.isAllDay %}, {{ event.startsAt|date(clock.time) }}{% endif %}
+                                </span>
+                                {% if trip.isOffer %}
+                                    <span class="text-[11px] px-1.5 py-0.5 rounded bg-accent-soft text-accent flex-shrink-0"
+                                          title="{{ 'search.fork_insight.offer_hint'|trans({}, 'fork') }}">
+                                        {{ 'search.fork_insight.offer'|trans({}, 'fork') }}
+                                    </span>
+                                {% endif %}
+                                <span class="ml-auto text-xs text-ink-faint flex-shrink-0">
+                                    {{ 'search.fork_insight.mail_count'|trans({ '%count%': trip.mail|length }, 'fork') }}
+                                    {% if trip.mail is not empty %}<i class="fa-solid fa-chevron-down ml-1 text-[10px]" aria-hidden="true"></i>{% endif %}
+                                </span>
+                            </summary>
+                            {% if event.location %}
+                                <p class="text-xs text-ink-muted mt-1 pl-6 truncate">{{ event.location }}</p>
+                            {% endif %}
+                            {% if trip.mail is not empty %}
+                                <ul class="mt-1.5 pl-6 space-y-0.5">
+                                    {% for mail in trip.mail %}
+                                        <li class="text-xs truncate">
+                                            <a href="{{ mail.thread ? path('app_mail_thread', { id: mail.thread }) : path('app_mail_message', { id: mail.id }) }}"
+                                               class="text-ink-soft hover:text-accent hover:underline">
+                                                <span class="text-ink-faint">{{ mail.receivedAt ? mail.receivedAt|intl_date('dMMM') : '' }}</span>
+                                                <span class="font-medium">{{ mail.from }}</span> · {{ mail.subject }}
+                                            </a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </details>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+</turbo-frame>

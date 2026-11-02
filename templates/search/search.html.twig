@@ -94,6 +94,11 @@
         {% include 'search/_semantic_notice.html.twig' with { semantic: semantic } %}
     {% endif %}
 
+    {# FORK (FORK.md): coming events and the chat model's answer, lazily. #}
+    {% if q != '' and page|default(1) == 1 %}
+        {% include 'fork/search/_insight.html.twig' with { q: q, has_results: threads is not empty } %}
+    {% endif %}
+
     {% if q == '' %}
         {# Empty state — no query yet #}
         <li class="flex flex-col items-center justify-center py-16 text-center px-4">

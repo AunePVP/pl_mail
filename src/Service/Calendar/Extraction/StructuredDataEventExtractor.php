@@ -12,6 +12,8 @@ use App\Service\Calendar\Extraction\StructuredData\JsonLdReader;
 use App\Service\Calendar\Extraction\StructuredData\MappedEvent;
 use App\Service\Calendar\Extraction\StructuredData\Node;
 use App\Service\Calendar\Extraction\StructuredData\StructuredDataMapperInterface;
+use App\Service\Fork\ForkFloatingTime;
+use App\Service\User\UserTimezoneResolver;
 use DateTimeImmutable;
 use DateTimeZone;
 use Psr\Log\LoggerInterface;
@@ -80,6 +82,8 @@ final readonly class StructuredDataEventExtractor implements EventExtractorInter
         private LoggerInterface $logger,
         #[AutowireIterator('app.structured_data_mapper')]
         private iterable        $mappers,
+        // FORK (FORK.md): the reader's zone, for offset-less times (ForkFloatingTime).
+        private ?UserTimezoneResolver $forkTimezones = null,
     ) {
     }
 
@@ -119,6 +123,8 @@ final readonly class StructuredDataEventExtractor implements EventExtractorInter
         $issuer = $this->issuerDomain($context->fromAddress);
         $byType = $this->mappersByType();
         $events = [];
+        // FORK (FORK.md): offset-less times are read in the reader's zone.
+        $zone   = $this->forkTimezones?->resolve($context->account->usr);
 
         foreach ($this->reader->read($html) as $node) {
             $mapper = $byType[mb_strtolower($node->type())] ?? null;
@@ -130,6 +136,11 @@ final readonly class StructuredDataEventExtractor implements EventExtractorInter
             }
 
             foreach ($this->mapped($mapper, $node) as $mapped) {
+                // FORK (FORK.md): local clock faces, not UTC.
+                if (null !== $zone && true === ForkFloatingTime::isFloating($node->data)) {
+                    $mapped = ForkFloatingTime::localised($mapped, $zone);
+                }
+
                 $event = $this->toExtractedEvent($mapped, $node, $issuer);
 
                 if (null !== $event) {

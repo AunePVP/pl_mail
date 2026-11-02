@@ -1,0 +1,19 @@
+{#
+    FORK (FORK.md): two panels above the search results, each loaded by a lazy
+    frame of its own once the list is on screen. See ForkSearchInsightController
+    for why there are two.
+
+    Only on the first page of a search with words in it: a page further down is
+    somebody reading the list, not asking a question.
+#}
+<li class="border-b border-line" data-fork-search-insight>
+    <turbo-frame id="fork-search-trips" src="{{ path('app_fork_search_trips', { q: q }) }}" loading="lazy"></turbo-frame>
+    {% if has_results %}
+        <turbo-frame id="fork-search-answer" src="{{ path('app_fork_search_answer', { q: q }) }}" loading="lazy">
+            <div class="px-4 py-2.5 flex items-center gap-2 text-xs text-ink-faint" data-fork-answer-state="loading">
+                <i class="fa-solid fa-wand-magic-sparkles animate-pulse" aria-hidden="true"></i>
+                {{ 'search.fork_insight.loading'|trans({}, 'fork') }}
+            </div>
+        </turbo-frame>
+    {% endif %}
+</li>

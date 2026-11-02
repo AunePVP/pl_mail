@@ -8,3 +8,13 @@ message:
         label: "Unsubscribe"
         hint_link: "Opens the sender's unsubscribe page in a new tab"
         hint_mail: "Opens a message to the sender's unsubscribe address"
+search:
+    fork_insight:
+        trips_heading: "Coming up"
+        untitled: "Untitled"
+        offer: "Suggested"
+        offer_hint: "Read from a mail, not on the calendar yet. Open the mail to add it."
+        mail_count: "{0} no mail|{1} 1 mail|]1,Inf[ %count% mails"
+        loading: "AI is reading the results …"
+        answer_heading: "In short"
+        disclaimer: "Summarised by AI from the first results – when in doubt, open the mail."
