@@ -45,7 +45,7 @@ final class ForkSearchInsightTest extends WebTestCase
         $container->set('http_client', new MockHttpClient(function (): MockResponse {
             ++$this->asked;
 
-            return new MockResponse(json_encode(['message' => ['content' => $this->answer], 'done' => true, 'eval_count' => 1]));
+            return new MockResponse(self::ollamaStream($this->answer));
         }));
 
         $this->em         = $container->get(EntityManagerInterface::class);
@@ -197,7 +197,8 @@ final class ForkSearchInsightTest extends WebTestCase
             'groups'    => [['title' => 'Eine Gruppe aus einem', 'ids' => [$thread->id]]],
         ]);
 
-        $this->client->request('GET', '/mail/search/fork/answer?q=Flug');
+        $this->stream('Flug');
+        $this->client->request('GET', '/mail/search/fork/answer?q=Flug&after=1');
 
         self::assertResponseIsSuccessful();
         self::assertSame(1, $this->asked);
@@ -207,6 +208,45 @@ final class ForkSearchInsightTest extends WebTestCase
         self::assertSelectorNotExists('[data-fork-answer-groups]');
     }
 
+    /** The frame asks nothing; the stream writes the prose as it comes, decoded, and keeps the answer. */
+    public function testTheAnswerIsStreamedAndThenKept(): void
+    {
+        $this->switchOn();
+        $this->seedThread('Ihre Flugbuchung nach Lissabon ist bestätigt');
+        $this->answer = json_encode(['answer' => "Dein Flug \"XY 1234\" ist bestätigt.", 'important' => [], 'groups' => []]);
+
+        $this->client->request('GET', '/mail/search/fork/answer?q=Flug');
+
+        self::assertSelectorExists('[data-fork-answer-state="streaming"][data-controller="fork--search-answer"]');
+        self::assertSame(0, $this->asked);
+
+        $frames = $this->stream('Flug');
+        $tokens = array_filter($frames, static fn (array $f): bool => 'token' === $f['type']);
+
+        self::assertGreaterThan(1, count($tokens), 'more than one piece, or nothing was streamed');
+        self::assertSame('Dein Flug "XY 1234" ist bestätigt.', implode('', array_column($tokens, 'text')));
+        self::assertSame(['type' => 'done'], end($frames));
+
+        // Kept: the frame draws it whole, and asking again asks nobody.
+        $this->client->request('GET', '/mail/search/fork/answer?q=Flug');
+        self::assertSelectorTextContains('[data-fork-answer-text]', 'Dein Flug "XY 1234" ist bestätigt.');
+        self::assertSame([['type' => 'done']], $this->stream('Flug'));
+        self::assertSame(1, $this->asked);
+    }
+
+    /** `after` is the reload once a stream is done; it never starts another. */
+    public function testTheReloadAfterAStreamNeverStartsOne(): void
+    {
+        $this->switchOn();
+        $this->seedThread('Ihre Flugbuchung nach Lissabon ist bestätigt');
+
+        $this->client->request('GET', '/mail/search/fork/answer?q=Flug&after=1');
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorNotExists('[data-fork-answer-state]');
+        self::assertSame(0, $this->asked);
+    }
+
     public function testNoAnswerWithoutTheSummarySwitch(): void
     {
         $this->seedThread('Ihre Flugbuchung nach Lissabon ist bestätigt');
@@ -214,11 +254,65 @@ final class ForkSearchInsightTest extends WebTestCase
         $this->client->request('GET', '/mail/search/fork/answer?q=Flug');
 
         self::assertResponseIsSuccessful();
-        self::assertSame(0, $this->asked);
         self::assertSelectorNotExists('[data-fork-answer-state]');
+        self::assertSame([['type' => 'done']], $this->stream('Flug'));
+        self::assertSame(0, $this->asked);
+    }
+
+    /** "ich" is in "Zurich Airport", and a question about an order is not about flights. */
+    public function testTheWordsOfAQuestionDoNotFindAFlight(): void
+    {
+        $flight           = $this->seedEvent('XY1234 ZRH → LIS', ExtractionKind::Flight, '+10 days');
+        $flight->location = 'Zurich Airport';
+        $this->em->flush();
+
+        $this->client->request('GET', '/mail/search/fork/trips?q=' . rawurlencode('was habe ich als letztes bestellt'));
+        self::assertSelectorNotExists('[data-fork-trip]');
+
+        $this->client->request('GET', '/mail/search/fork/trips?q=zurich');
+        self::assertSelectorExists('[data-fork-trip]');
     }
 
     // ── Fixtures ──────────────────────────────────────────────────────────
+
+    /**
+     * What Ollama's /api/chat streams for $content: a few characters a line,
+     * so an escape or an umlaut can be cut between two of them.
+     */
+    public static function ollamaStream(string $content): string
+    {
+        $lines = '';
+
+        foreach (mb_str_split($content, 4) as $piece) {
+            $lines .= json_encode(['message' => ['content' => $piece], 'done' => false]) . "\n";
+        }
+
+        return $lines . json_encode(['done' => true, 'eval_count' => 1]) . "\n";
+    }
+
+    /**
+     * The NDJSON frames of /answer/stream. Read from our own buffer or the
+     * BrowserKit response, whichever holds them — see ThreadSummaryTest::post().
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function stream(string $q): array
+    {
+        ob_start();
+
+        try {
+            $this->client->request('GET', '/mail/search/fork/answer/stream?q=' . rawurlencode($q));
+        } finally {
+            $escaped = (string) ob_get_clean();
+        }
+
+        $body = '' !== $escaped ? $escaped : (string) $this->client->getInternalResponse()->getContent();
+
+        return array_values(array_map(
+            static fn (string $line): array => json_decode($line, true),
+            array_filter(explode("\n", $body)),
+        ));
+    }
 
     private function switchOn(): void
     {

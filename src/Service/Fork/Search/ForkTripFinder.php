@@ -74,12 +74,28 @@ final readonly class ForkTripFinder
         'unterkunft' => ExtractionKind::Lodging,
         'mietwagen'  => ExtractionKind::Rental,
         'paket'      => ExtractionKind::Delivery,
+        'bestell'    => ExtractionKind::Delivery,
+        'order'      => ExtractionKind::Delivery,
         'lieferung'  => ExtractionKind::Delivery,
         'sendung'    => ExtractionKind::Delivery,
         'ticket'     => ExtractionKind::Ticket,
         'konzert'    => ExtractionKind::Ticket,
         'restaurant' => ExtractionKind::Dining,
         'tisch'      => ExtractionKind::Dining,
+    ];
+
+    /**
+     * Words of a question rather than of a title. "was habe ich als letztes
+     * bestellt" found every flight from Zürich: "ich" is in "Zurich Airport".
+     */
+    private const array STOP_WORDS = [
+        'ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr', 'mein', 'meine', 'meinen', 'meiner', 'mir', 'mich',
+        'was', 'wer', 'wo', 'wann', 'wie', 'welche', 'welcher', 'welches', 'habe', 'hab', 'hat', 'hatte',
+        'ist', 'sind', 'war', 'bin', 'wird', 'als', 'am', 'an', 'auf', 'aus', 'bei', 'bis', 'das', 'dem',
+        'den', 'der', 'die', 'ein', 'eine', 'einen', 'für', 'im', 'in', 'mit', 'nach', 'noch', 'nicht',
+        'oder', 'und', 'von', 'vom', 'vor', 'zu', 'zum', 'zur', 'letzte', 'letzten', 'letztes', 'nächste',
+        'nächsten', 'nächstes', 'gibt', 'the', 'and', 'for', 'what', 'when', 'where', 'did', 'have', 'last',
+        'next', 'were', 'my', 'from', 'with',
     ];
 
     /** "XY 1234", "AB987", "ICE 75": two letters or a letter and a digit, then digits. */
@@ -168,7 +184,12 @@ final readonly class ForkTripFinder
         $haystack = mb_strtolower((string) $event->title . ' ' . (string) $event->location);
 
         foreach ($words as $word) {
-            if (3 <= mb_strlen($word) && true === str_contains($haystack, $word)) {
+            if (3 > mb_strlen($word) || true === in_array($word, self::STOP_WORDS, true)) {
+                continue;
+            }
+
+            // At the start of a word: "lis" is Lisbon, and not "Kalisz".
+            if (1 === preg_match('/(?<![\p{L}\p{N}])' . preg_quote($word, '/') . '/u', $haystack)) {
                 return true;
             }
         }

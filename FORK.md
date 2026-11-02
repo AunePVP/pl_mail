@@ -350,6 +350,9 @@ eigener Turbo-Frame mit `loading="lazy"`; die Liste wartet auf keins davon.
   und spätestens 2 Tage nach seinem Ende kam, an keinem anderen Termin hängt und kein anderer Termin
   mit derselben Nummer zwischen ihr und diesem liegt. Sonst hing die Slot&Fly-Buchung vom April am
   Flug im Dezember.
+  Suchwörter passen nur am Wortanfang, und Fragewörter („ich“, „was“, „als“, „letztes“ …,
+  `STOP_WORDS`) zählen nicht: „was habe ich als letztes bestellt“ fand sonst jeden Flug ab „Zur*ich*
+  Airport“. „bestell…“/„order…“ nennen die Art Lieferung.
 - Die Links in allen drei Feldern öffnen die Mail wie eine Zeile der Liste
   (`data-action="click->mail--mail-pane#open"`); die Frame-Platzhalter tragen `target="_top"`.
   Vorher navigierte ein Klick den Lazy-Frame selbst (Turbo übernimmt nur den *Inhalt* des
@@ -359,13 +362,26 @@ eigener Turbo-Frame mit `loading="lazy"`; die Liste wartet auf keins davon.
   Schreib-Modell bekommt die ersten 20 Treffer (Betreff, Absender, Datum, markierter Ausschnitt –
   nie ganze Mails) und die gefundenen Termine und antwortet mit 1–3 Sätzen, bis zu drei wichtigsten
   Mails und Gruppen von Treffern zum selben Vorgang. Nur IDs aus den gegebenen Treffern werden
-  angezeigt. Cache 6 h pro Nutzer, Suchtext und Trefferstand.
+  angezeigt. Cache 6 h pro Nutzer, Suchtext und Trefferstand. Die Treffer sind dieselben wie in der
+  Liste, also auch die, die nur die Embedding-Suche gefunden hat; ohne Reranker die ersten 20 in der
+  Sortierung der Liste (meist „Neueste zuerst“), mit Reranker die 20 besten von 50. Der Prompt steht
+  im Code (`ForkSearchAnswer::messages()`), nicht in den Einstellungen.
+  **Gestreamt:** Der Frame zeichnet erst einen Kasten (`fork--search-answer`,
+  `assets/controllers/fork/search_answer_controller.js`), der `/mail/search/fork/answer/stream` als
+  NDJSON liest (`token`, dann `done` oder `error`, wie die Schreibhilfe des Originals) und den Text
+  zeigt, während das Modell schreibt. `ForkJsonFieldStream` zieht dafür das Feld `answer` aus dem
+  halbfertigen JSON. Bei `done` lädt der Frame `…/answer?after=1` und zeigt die fertige Antwort mit
+  Links und Gruppen aus dem Cache; `after` startet nie einen neuen Stream. Wer die Seite verlässt,
+  bricht den Aufruf ab (`connection_aborted()`), das Modell hört dann auf.
 
 Neue Dateien: `src/Controller/Fork/ForkSearchInsightController.php` (Routen
-`/mail/search/fork/trips` und `/mail/search/fork/answer`), `src/Service/Fork/Search/ForkTripFinder.php`,
-`ForkTrip.php`, `ForkSearchAnswer.php`, `ForkAnswer.php`, `templates/fork/search/_insight.html.twig`,
-`_trips.html.twig`, `_answer.html.twig`, Schlüssel `search.fork_insight.*` in `translations/fork.*.yaml`,
-Test `tests/Controller/Fork/ForkSearchInsightTest.php`.
+`/mail/search/fork/trips`, `/mail/search/fork/answer` und `/mail/search/fork/answer/stream`),
+`src/Service/Fork/Search/ForkTripFinder.php`, `ForkTrip.php`, `ForkSearchAnswer.php`, `ForkAnswer.php`,
+`ForkAnswerRequest.php`, `ForkJsonFieldStream.php`, `assets/controllers/fork/search_answer_controller.js`,
+`templates/fork/search/_insight.html.twig`, `_trips.html.twig`, `_answer.html.twig`, Schlüssel
+`search.fork_insight.*` in `translations/fork.*.yaml`, Tests
+`tests/Controller/Fork/ForkSearchInsightTest.php`, `tests/Service/Fork/ForkJsonFieldStreamTest.php`,
+`tests/e2e/fork-search-answer.spec.ts`.
 
 Änderung an einer Datei des Originals (mit `FORK (FORK.md)` markiert):
 

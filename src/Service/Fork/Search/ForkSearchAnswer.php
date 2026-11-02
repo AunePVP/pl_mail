@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace App\Service\Fork\Search;
 
+use App\Domain\DTO\Ai\AiChatResult;
 use App\Domain\DTO\ParsedSearchQuery;
 use App\Entity\Ai\AiFeature;
 use App\Entity\User\User;
 use App\Service\Ai\AiAssistant;
 use App\Service\User\UserTimezoneResolver;
 use DateTimeImmutable;
-use Symfony\Contracts\Cache\CacheInterface;
-use Symfony\Contracts\Cache\ItemInterface;
+use Psr\Cache\CacheItemPoolInterface;
 
 /**
  * FORK (FORK.md): a short answer above the search results, from the chat model.
@@ -38,6 +38,10 @@ use Symfony\Contracts\Cache\ItemInterface;
  *
  * Cached per user, query and result set, so going back to a search does not
  * cost the model again, and new mail in the results asks again.
+ *
+ * Streamed: the prose arrives token by token while the model writes it
+ * (ForkSearchInsightController::answerStream, ForkJsonFieldStream), and the
+ * links and groups once the whole object is there.
  */
 final readonly class ForkSearchAnswer
 {
@@ -48,10 +52,10 @@ final readonly class ForkSearchAnswer
     private const float TEMPERATURE = 0.2;
 
     public function __construct(
-        private AiAssistant          $ai,
-        private ForkSearchCandidates $candidates,
-        private UserTimezoneResolver $timezones,
-        private CacheInterface       $cache,
+        private AiAssistant            $ai,
+        private ForkSearchCandidates   $candidates,
+        private UserTimezoneResolver   $timezones,
+        private CacheItemPoolInterface $cache,
     ) {
     }
 
@@ -61,9 +65,12 @@ final readonly class ForkSearchAnswer
     }
 
     /**
+     * The question this search would put to the model, or null when there is
+     * nothing to ask: the switch is off, or the search found nothing.
+     *
      * @param list<ForkTrip> $trips what ForkTripFinder found, so the answer can name it
      */
-    public function answer(User $user, ParsedSearchQuery $parsed, string $raw, array $trips): ?ForkAnswer
+    public function prepare(User $user, ParsedSearchQuery $parsed, string $raw, array $trips): ?ForkAnswerRequest
     {
         if (false === $this->isAvailable()) {
             return null;
@@ -88,22 +95,82 @@ final readonly class ForkSearchAnswer
             implode(',', array_map(static fn (ForkTrip $t): string => $t->event->id . '@' . $t->event->startsAt?->getTimestamp(), $trips)),
         ]));
 
-        $decoded = $this->cache->get($key, function (ItemInterface $item) use ($user, $raw, $candidates, $trips): ?array {
-            $item->expiresAfter(self::CACHE_SECONDS);
+        return new ForkAnswerRequest($key, $byId, $this->messages($user, $raw, $candidates, $trips));
+    }
 
-            $decoded = $this->ask($user, $raw, $candidates, $trips);
+    /**
+     * The answer already given to this question: a ForkAnswer, null for an
+     * answer that said nothing, false when it has not been asked yet.
+     */
+    public function cached(ForkAnswerRequest $request): ForkAnswer|false|null
+    {
+        $item = $this->cache->getItem($request->key);
 
-            if (null === $decoded) {
-                $item->expiresAfter(1);
+        if (false === $item->isHit() || false === is_array($item->get())) {
+            return false;
+        }
+
+        return $this->build($request, $item->get());
+    }
+
+    /**
+     * Asks the model, yielding the prose as it is written; returns the whole
+     * answer (and keeps it) when the model is done, null when it failed.
+     *
+     * Not a generator function itself, for the reason AiAssistant::chatStream()
+     * gives: a refusal has to happen here, not at the caller's first foreach.
+     * Null means nothing was asked.
+     *
+     * @return \Generator<int, string, void, ?ForkAnswer>|null
+     */
+    public function stream(ForkAnswerRequest $request): ?\Generator
+    {
+        $tokens = $this->ai->chatStream(AiFeature::Summary, $request->messages, self::TEMPERATURE);
+
+        return null === $tokens ? null : $this->relay($request, $tokens);
+    }
+
+    /**
+     * @param \Generator<int, string, void, AiChatResult> $tokens
+     *
+     * @return \Generator<int, string, void, ?ForkAnswer>
+     */
+    private function relay(ForkAnswerRequest $request, \Generator $tokens): \Generator
+    {
+        $prose = new ForkJsonFieldStream('answer');
+
+        foreach ($tokens as $token) {
+            $text = $prose->feed($token);
+
+            if ('' !== $text) {
+                yield $text;
             }
+        }
 
-            return $decoded;
-        });
+        $result = $tokens->getReturn();
 
-        if (null === $decoded) {
+        if (false === $result->succeeded || null === $result->content) {
             return null;
         }
 
+        $decoded = $this->decode($result->content);
+
+        $item = $this->cache->getItem($request->key);
+        $item->set($decoded);
+        $item->expiresAfter(self::CACHE_SECONDS);
+        $this->cache->save($item);
+
+        return $this->build($request, $decoded);
+    }
+
+    /**
+     * What the model said, trusted for nothing but prose and the ids it was given.
+     *
+     * @param array<mixed> $decoded
+     */
+    private function build(ForkAnswerRequest $request, array $decoded): ?ForkAnswer
+    {
+        $byId   = $request->threads;
         $answer = trim((string) (is_string($decoded['answer'] ?? null) ? $decoded['answer'] : ''));
 
         $important = [];
@@ -145,9 +212,9 @@ final readonly class ForkSearchAnswer
      * @param list<ForkCandidate> $candidates
      * @param list<ForkTrip>      $trips
      *
-     * @return array<string, mixed>|null
+     * @return list<array{role: string, content: string}>
      */
-    private function ask(User $user, string $raw, array $candidates, array $trips): ?array
+    private function messages(User $user, string $raw, array $candidates, array $trips): array
     {
         $zone     = $this->timezones->resolve($user);
         $language = str_starts_with(mb_strtolower((string) ($user->locale ?? 'de')), 'en') ? 'English' : 'German';
@@ -177,7 +244,7 @@ final readonly class ForkSearchAnswer
         ], $trips);
 
         $system = <<<PROMPT
-            You help somebody who searched their own mailbox. You get what they typed, today's date, matching entries from their calendar, and the first search results (most relevant first). Answer with ONE JSON object and nothing else:
+            You help somebody who searched their own mailbox. You get what they typed, today's date, matching entries from their calendar, and the first search results (most relevant first). Answer with ONE JSON object and nothing else, its keys in this order (the answer is shown while you write it):
             {"answer": "...", "important": [ids], "groups": [{"title": "...", "ids": [ids]}]}
 
             - answer: one to three short sentences in {$language} that answer what they most likely want to know, with the concrete facts (dates, times, flight numbers, amounts) found in the data. Prefer what lies ahead over what is past, name things in the order they happen, and do not call anything an outbound or return trip unless the data says so. No greeting, no advice, nothing that is not in the data. Empty string if the data answers nothing.
@@ -193,15 +260,15 @@ final readonly class ForkSearchAnswer
             'results'  => $results,
         ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PRETTY_PRINT);
 
-        $raw = $this->ai->chat(AiFeature::Summary, [
+        return [
             ['role' => 'system', 'content' => $system],
             ['role' => 'user', 'content' => (string) $userMessage],
-        ], self::TEMPERATURE);
+        ];
+    }
 
-        if (null === $raw) {
-            return null;
-        }
-
+    /** @return array<mixed> */
+    private function decode(string $raw): array
+    {
         $start = strpos($raw, '{');
         $end   = strrpos($raw, '}');
 

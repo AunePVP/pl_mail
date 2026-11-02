@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Controller\Fork;
 
+use App\Domain\Helper\RequestTimeLimit;
 use App\Entity\User\User;
+use App\Service\Fork\Search\ForkAnswerRequest;
 use App\Service\Fork\Search\ForkReranker;
 use App\Service\Fork\Search\ForkSearchAnswer;
 use App\Service\Fork\Search\ForkSearchCandidates;
@@ -13,6 +15,7 @@ use App\Service\Search\SearchQueryParser;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
@@ -26,8 +29,8 @@ use Symfony\Component\Security\Http\Attribute\CurrentUser;
  * results are a small reranker and take about a second; the answer is the
  * chat model and takes several. In one frame each would wait for the slowest.
  *
- * Both re-read the query from the URL and run as the signed-in user, so
- * neither can show anything the results list could not.
+ * All re-read the query from the URL and run as the signed-in user, so
+ * none can show anything the results list could not.
  */
 #[Route('/mail/search/fork', name: 'app_fork_search_')]
 #[IsGranted('IS_AUTHENTICATED')]
@@ -40,6 +43,9 @@ final class ForkSearchInsightController extends AbstractController
     private const float BEST_SCORE = 0.5;
 
     private const int BEST_COUNT = 3;
+
+    /** As ComposeAssistController's: above the model client's idle timeout plus a cold load. */
+    private const int STREAM_TIME_LIMIT_SECONDS = 300;
 
     public function __construct(
         private readonly SearchQueryParser $parser,
@@ -94,21 +100,122 @@ final class ForkSearchInsightController extends AbstractController
         ]);
     }
 
+    /**
+     * The answer's frame. An answer already given is drawn whole; otherwise
+     * the frame is a box that asks answerStream() and fills while the model
+     * writes, then loads this again with `after=1` for the finished answer.
+     * `after` never starts a stream, so a cache that lost the answer is an
+     * empty frame and not a loop.
+     */
     #[Route('/answer', name: 'answer', methods: ['GET'])]
     public function answer(Request $request, #[CurrentUser] User $user): Response
     {
         $this->releaseSession($request);
 
-        $raw    = trim($request->query->getString('q'));
-        $parsed = $this->parser->parse($raw);
-        $answer = null;
+        $raw      = trim($request->query->getString('q'));
+        $question = $this->question($user, $raw);
+        $answer   = null === $question ? null : $this->answers->cached($question);
 
-        if ('' !== $parsed->freeText) {
-            $trips  = $this->trips->find($user, $parsed->freeText);
-            $answer = $this->answers->answer($user, $parsed, $raw, $trips);
+        return $this->render('fork/search/_answer.html.twig', [
+            'answer' => false === $answer ? null : $answer,
+            'stream' => false === $answer && false === $request->query->getBoolean('after'),
+            'q'      => $raw,
+        ]);
+    }
+
+    /**
+     * The answer as NDJSON while the model writes it, as the composer's
+     * assistant streams (ComposeAssistController::assistStream, whose comments
+     * say why each line below is there): `token` frames with the prose, then
+     * `done`, or `error`.
+     */
+    #[Route('/answer/stream', name: 'answer_stream', methods: ['GET'])]
+    public function answerStream(Request $request, #[CurrentUser] User $user): Response
+    {
+        $this->releaseSession($request);
+
+        $question = $this->question($user, trim($request->query->getString('q')));
+
+        $response = new StreamedResponse(function () use ($question): void {
+            $this->generate($question);
+        });
+
+        $response->headers->set('Content-Type', 'application/x-ndjson');
+        $response->headers->set('Cache-Control', 'no-cache, no-store, must-revalidate, private');
+        $response->headers->set('X-Accel-Buffering', 'no');
+
+        return $response;
+    }
+
+    private function question(User $user, string $raw): ?ForkAnswerRequest
+    {
+        $parsed = $this->parser->parse($raw);
+
+        if ('' === $parsed->freeText) {
+            return null;
         }
 
-        return $this->render('fork/search/_answer.html.twig', ['answer' => $answer]);
+        return $this->answers->prepare($user, $parsed, $raw, $this->trips->find($user, $parsed->freeText));
+    }
+
+    /** A method of its own so the generator is freed, and the model call cancelled, when it returns. */
+    private function generate(?ForkAnswerRequest $question): void
+    {
+        ignore_user_abort(true);
+        RequestTimeLimit::hold(self::STREAM_TIME_LIMIT_SECONDS);
+
+        if (null === $question) {
+            $this->frame(['type' => 'done']);
+
+            return;
+        }
+
+        if (false !== $this->answers->cached($question)) {
+            $this->frame(['type' => 'done']);
+
+            return;
+        }
+
+        $tokens = $this->answers->stream($question);
+
+        if (null === $tokens) {
+            $this->frame(['type' => 'error']);
+
+            return;
+        }
+
+        foreach ($tokens as $text) {
+            $this->frame(['type' => 'token', 'text' => $text]);
+
+            if (0 !== connection_aborted()) {
+                break;
+            }
+        }
+
+        if (true === $tokens->valid()) {
+            return;
+        }
+
+        $this->frame(null === $tokens->getReturn() && false === $this->answers->cached($question)
+            ? ['type' => 'error']
+            : ['type' => 'done']);
+    }
+
+    /**
+     * One NDJSON frame, on the wire now: ob_flush() for php.ini's
+     * output_buffering, then flush() (ComposeAssistController::frame()).
+     *
+     * @param array<string, mixed> $frame
+     */
+    private function frame(array $frame): void
+    {
+        echo json_encode($frame, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE), "\n";
+
+        if (0 < ob_get_level()) {
+            ob_flush();
+        }
+
+        flush();
     }
 
     /**
