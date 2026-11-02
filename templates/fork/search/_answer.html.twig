@@ -1,6 +1,32 @@
-{# FORK (FORK.md): the chat model's answer above the search results. See ForkSearchAnswer. #}
+{#
+    FORK (FORK.md): the chat model's answer above the search results. See ForkSearchAnswer.
+
+    `stream`: not asked yet. fork--search-answer reads the prose from
+    answerStream() into the box as the model writes it, then loads this frame
+    again with `after=1`, which draws the finished answer with its links.
+#}
 <turbo-frame id="fork-search-answer" target="_top">
-    {% if answer is not null %}
+    {% if stream|default(false) %}
+        <div data-controller="fork--search-answer"
+             data-fork--search-answer-url-value="{{ path('app_fork_search_answer_stream', { q: q }) }}"
+             data-fork--search-answer-after-value="{{ path('app_fork_search_answer', { q: q, after: 1 }) }}"
+             data-fork-answer-state="streaming">
+            <div class="px-4 py-2.5 flex items-center gap-2 text-xs text-ink-faint" data-fork--search-answer-target="waiting">
+                <i class="fa-solid fa-wand-magic-sparkles animate-pulse" aria-hidden="true"></i>
+                {{ 'search.fork_insight.loading'|trans({}, 'fork') }}
+            </div>
+            <div class="px-4 py-2.5" data-fork--search-answer-target="box" hidden>
+                <div class="rounded-md border border-accent/20 bg-accent-soft/40 px-3 py-2">
+                    <p class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-accent mb-1">
+                        <i class="fa-solid fa-wand-magic-sparkles animate-pulse" aria-hidden="true"></i>
+                        {{ 'search.fork_insight.answer_heading'|trans({}, 'fork') }}
+                    </p>
+                    <p class="text-sm text-ink whitespace-pre-line" data-fork--search-answer-target="text" aria-live="polite"></p>
+                    <p class="text-[10px] text-ink-faint mt-1.5">{{ 'search.fork_insight.disclaimer'|trans({}, 'fork') }}</p>
+                </div>
+            </div>
+        </div>
+    {% elseif answer is not null %}
         <div class="px-4 py-2.5" data-fork-answer-state="ready">
             <div class="rounded-md border border-accent/20 bg-accent-soft/40 px-3 py-2">
                 <p class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-accent mb-1">

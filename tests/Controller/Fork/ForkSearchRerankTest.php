@@ -75,7 +75,7 @@ final class ForkSearchRerankTest extends WebTestCase
 
             $this->chats[] = $body;
 
-            return new MockResponse(json_encode(['message' => ['content' => '{"answer":"Ok.","important":[],"groups":[]}'], 'done' => true, 'eval_count' => 1]));
+            return new MockResponse(ForkSearchInsightTest::ollamaStream('{"answer":"Ok.","important":[],"groups":[]}'));
         }));
 
         $this->em         = $container->get(EntityManagerInterface::class);
@@ -161,7 +161,13 @@ final class ForkSearchRerankTest extends WebTestCase
         $this->winner = 'XY1234';
 
         $this->client->request('GET', '/mail/search/fork/best?q=Flug');
-        $this->client->request('GET', '/mail/search/fork/answer?q=Flug');
+        ob_start();
+
+        try {
+            $this->client->request('GET', '/mail/search/fork/answer/stream?q=Flug');
+        } finally {
+            ob_end_clean();
+        }
 
         self::assertCount(1, $this->reranked, 'cached between the two frames');
         self::assertCount(1, $this->chats);
