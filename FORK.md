@@ -195,6 +195,20 @@ Median bei 0,4 s. Ein „Neu fragen“ ohne Warteschlange und echte Hintergrunda
 zur Seite.
 **Kandidat fürs Original:** ja (dort erst Issue, nur nach Freigabe).
 
+### 12. Filterregeln „Archivieren“ und „Als Spam markieren“ legen Mail richtig ab
+
+`src/Service/Rule/RuleActionExecutor.php`: `moveOutOfInbox()` gibt bei „Archivieren“ das
+Archiv-Label (wie `ThreadStatusUpdater::archive()`); „Als Spam markieren“ geht über die neue Methode
+`moveToSpam()` denselben Weg wie das Verschieben-Menü (`attachLabel` + `moveCopies` +
+`detachLabel(Inbox, moveOnImap: false)`), statt auf dem Server zu archivieren. Test:
+`tests/Service/Rule/ForkRuleLeavesInboxTest.php`.
+
+**Grund:** In der Produktion laufen 7 Regeln „Als Spam markieren“. Am 2026-11-02 lagen 66 so
+erfasste Mails eines Kontos auf dem Server in Archivordnern statt im Spam-Ordner – plMail zeigte
+sie als Spam, alle anderen Programme im Archiv, der Spamfilter des Servers lernte nichts. Per Regel archivierte Mail hatte gar kein Label mehr und stand in keiner
+Liste (nicht Posteingang, nicht Archiv). Schon so abgelegte Mail wird nicht nachträglich verschoben.
+**Kandidat fürs Original:** ja (dort erst Issue, nur nach Freigabe).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,

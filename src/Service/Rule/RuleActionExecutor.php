@@ -7,6 +7,7 @@ namespace App\Service\Rule;
 use App\Domain\Enum\Integration\Capability;
 use App\Domain\Enum\Mail\LabelRole;
 use App\Entity\Rule\MailRule;
+use App\Entity\Label\Label;
 use App\Entity\Mail\Message;
 use App\Infrastructure\Messaging\Message\UploadAttachmentsMessage;
 use App\Repository\Integration\IntegrationRepository;
@@ -255,20 +256,35 @@ final readonly class RuleActionExecutor
             $message->removeLabel($inbox);
         }
 
-        if (null !== $destination) {
-            $label = $this->labelResolver->systemLabel($destination, $account);
-            $message->addLabel($label);
-        }
+        // FORK (FORK.md): archive gets its Archive label, as
+        // ThreadStatusUpdater::archive() gives it, or the mail is in no list.
+        $label = $this->labelResolver->systemLabel($destination ?? LabelRole::Archive, $account);
+        $message->addLabel($label);
 
         // One provider call for the whole move, not one per label: these carry
         // provider-specific semantics (Gmail label swap, IMAP folder move)
         // that the propagator already encodes.
         match ($destination) {
             LabelRole::Trash => $this->propagator->trash([$message]),
+            // FORK (FORK.md): into the spam folder, the way the move menu
+            // sends mail there (ThreadStatusUpdater::moveToFolder()), not
+            // archived on the server.
+            LabelRole::Spam => $this->moveToSpam($message, $label, $inbox),
             default => $this->propagator->archive([$message]),
         };
 
         return true;
+    }
+
+    /** FORK (FORK.md): see moveOutOfInbox(). */
+    private function moveToSpam(Message $message, Label $spam, ?Label $inbox): void
+    {
+        $this->propagator->attachLabel([$message], $spam);
+        $this->propagator->moveCopies([$message], $spam);
+
+        if (null !== $inbox) {
+            $this->propagator->detachLabel([$message], $inbox, moveOnImap: false);
+        }
     }
 
     /**
