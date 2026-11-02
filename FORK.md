@@ -301,6 +301,9 @@ Eine Zeile für den Befehl in der Befehlstabelle von `CONTRIBUTING.md` (verlangt
   eine Abfrage `$claim->source->isTrusted()` vorneweg. Das Original beschreibt dieses Verhalten für
   nicht vertrauenswürdige Quellen in `EventSource::isTrusted()`, setzt es im Reconciler aber nicht
   um (bisher gab es keine solche Quelle).
+- `src/Repository/Calendar/EventSourceLinkRepository.php`: `ForkLlmTravelExtractor::NAME` in
+  `CARD_EXTRACTORS`, sonst findet die Karte über der Mail den Vorschlag nicht – ohne Karte gibt es
+  keinen „Zum Kalender hinzufügen“-Knopf (in der Produktion am 2026-11-02 bemerkt).
 
 **Datenbank:** keine Änderung (Cache im normalen Symfony-Cache).
 
@@ -384,6 +387,20 @@ Neue Dateien: `src/Service/Fork/Search/ForkReranker.php`, `ForkSearchCandidates.
 
 **Grund:** Gemessen mit dem Reranker auf der Arc A380 (2026-11-02): 1,0 s für 50 Treffer zu „Flug“;
 erkennt Buchungsmails, achtet aber nicht aufs Datum (deshalb die Altersgewichtung).
+
+### 19. Insight-Flugkarte: Uhrzeit aus der Mail ist Ortszeit
+
+`src/Service/Insight/Extractor/FlightExtractor.php` (mit `FORK (FORK.md)` markiert): optionaler
+Konstruktorparameter `?UserTimezoneResolver`; eine im Text genannte Abflugzeit („15:45“) wird in der
+Zeitzone des Nutzers gelesen statt als UTC. Der `dedupeKey` nimmt den Tag aus dem Text (wie bisher).
+Ohne Resolver (die bestehenden Unit-Tests bauen den Extractor mit `new`) bleibt alles wie im Original.
+Test: `testTheFlightInsightReadsTheTimeInTheReadersZone` in `tests/Service/Fork/ForkFloatingTimeTest.php`.
+Vorhandene Karten korrigiert `app:backfill insights --since=…`.
+
+**Datenbank:** keine Änderung.
+
+**Grund:** Die Karte „In dieser Konversation gefunden“ zeigte einen 15:45-Abflug als 16:45 (2026-11-02).
+**Kandidat fürs Original:** ja, Fehlerbehebung (dort erst Issue, nur nach Freigabe).
 
 ## Update vom Original
 

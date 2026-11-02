@@ -10,6 +10,7 @@ use App\Entity\User\User;
 use App\Service\Calendar\Extraction\EventExtractionRunner;
 use App\Service\Calendar\Extraction\ExtractedEvent;
 use App\Service\Fork\ForkFloatingTime;
+use App\Service\Insight\Extractor\FlightExtractor;
 use DateTimeImmutable;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -56,6 +57,36 @@ final class ForkFloatingTimeTest extends KernelTestCase
         ]));
         self::assertTrue(ForkFloatingTime::isFloating(['a' => ['b' => '2026-12-10 07:35']]));
         self::assertFalse(ForkFloatingTime::isFloating(['checkinTime' => '2026-12-07']));
+    }
+
+    /**
+     * FORK (FORK.md): the flight card the insights read out of the text has
+     * the same problem — "15:45" in a mail is the reader's clock, not UTC.
+     */
+    public function testTheFlightInsightReadsTheTimeInTheReadersZone(): void
+    {
+        self::bootKernel();
+
+        $user           = new User();
+        $user->timezone = 'Europe/Berlin';
+
+        $account      = new Account();
+        $account->usr = $user;
+
+        $message              = new Message();
+        $message->account     = $account;
+        $message->fromAddress = 'noreply@lufthansa.com';
+        $message->subject     = 'Ihre Buchungsbestätigung';
+        $message->bodyText    = "Ihr Flug LH 1234 am 24.12.2026 um 09:15 Uhr\nStrecke: FRA–JFK";
+        $message->receivedAt  = new DateTimeImmutable('2026-11-10 08:00:00');
+
+        $drafts = self::getContainer()->get(FlightExtractor::class)->extract($message);
+
+        self::assertCount(1, $drafts);
+        // 09:15 in Frankfurt in December is 08:15Z.
+        self::assertSame('2026-12-24 08:15', $drafts[0]->happensAt?->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i'));
+        // The card is keyed on the day the mail states, as it was before.
+        self::assertSame('LH1234@2026-12-24', $drafts[0]->dedupeKey);
     }
 
     /** @return list<ExtractedEvent> */
