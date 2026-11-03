@@ -96,8 +96,9 @@ Konkrete Adressen, Zugänge und Pfade stehen **nicht** hier (der Fork ist öffen
 Container `plmail` (Image `ghcr.io/aunepvp/pl_mail:main`) und `plmail-db` (`postgres:18-alpine`) in
 einem eigenen Docker-Netz, angelegt aus Unraid-Vorlagen (`my-plmail.xml`, `my-plmail-db.xml` unter
 `/boot/config/plugins/dockerMan/templates-user/`). Davor ein Reverse Proxy (Nginx Proxy Manager) mit
-`proxy_buffering off` und langem Read-Timeout (docs/install/reverse-proxy.md). Die KI-Modelle
-laufen auf einem eigenen Rechner und werden über das VPN erreicht (Admin → KI).
+`proxy_buffering off` und langem Read-Timeout (docs/install/reverse-proxy.md). Schreib- und
+Embedding-Modell laufen auf einem eigenen Rechner und werden über das VPN erreicht (Admin → KI); der
+Reranker der Suche (FORK.md → Abweichung 18) läuft in einem eigenen Container auf dem Unraid.
 
 - Die Pfade im Container (`/app/var/raw`, `/app/var/attachments`, `/app/var/uploads`,
   `/app/var/secrets`) **nicht ändern**: plMail speichert Dateipfade als `var/raw/…` bzw.

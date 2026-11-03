@@ -414,7 +414,7 @@ jede Hälfte als cp1252 „repariert“: „bestÃ¤tigt“.
 **Admin → KI**, Feld „Reranker für die Suche (Adresse)“ unter „Suche nach Bedeutung“, oder die
 Umgebungsvariable **`FORK_RERANK_URL`**: volle Adresse eines `/rerank`-Endpoints im Cohere/Jina-Format
 (POST `{query, documents, top_n, instruction}`, Antwort `{results: [{index, relevance_score}]}`), z. B.
-Qwen3-Reranker-0.6B. Die Adresse auf der Seite gilt vor der Variable; ist beides leer, ist der
+Qwen3-Reranker. Der Server dahinter gehört nicht zum Fork (Betrieb: `CLAUDE.local.md`). Die Adresse auf der Seite gilt vor der Variable; ist beides leer, ist der
 Reranker aus und alles wie in Abweichung 16. Die Adresse muss **aus dem plmail-Container** erreichbar
 sein (LAN-IP bzw. Docker-Gateway, nicht `*.local`). Timeout 8 s; jeder Fehler heißt „ohne Ranking“
 und gilt für diese Suche 60 s, damit Stream und Nachladen von „Kurz gesagt“ nicht noch einmal warten.
@@ -429,7 +429,8 @@ Antwortzeit und Scores unter dem Feld, ohne zu speichern.
   sortiert nach Score, mild nach Alter gewichtet (höchstens halbiert, Halbwertszeit grob 2 Monate).
   Ergebnis 10 min gecacht, damit beide Felder es nur einmal kosten.
 - Neues Feld **„Beste Treffer“** (Frame `fork-search-best`, Route `/mail/search/fork/best`): bis zu 3
-  Treffer mit Score ≥ 0,5, nach ~1 s.
+  Treffer mit Score ≥ 0,5, beim ersten Aufruf einer Suche nach 4–5 s (Suche plus Ranking), danach
+  aus dem Cache.
 - **„Kurz gesagt“** bekommt die 20 besten statt der 20 neuesten Treffer.
 
 Neue Dateien: `src/Service/Fork/Search/ForkReranker.php`, `ForkSearchCandidates.php`,
@@ -439,7 +440,8 @@ Neue Dateien: `src/Service/Fork/Search/ForkReranker.php`, `ForkSearchCandidates.
 Für das Feld: `src/Form/Fork/ForkRerankExtension.php` (wie `ForkReasoningExtension`, Abweichung 9),
 `templates/fork/admin/_rerank.html.twig`, Schlüssel `admin.ai.field.rerank_url*` und
 `admin.ai.fork_rerank.*`, `migrations/Version20261102210000.php`, Test
-`tests/Controller/Admin/ForkRerankSettingTest.php`; `ForkAiOptionsRepository::forWrite()`, damit
+`tests/Controller/Admin/ForkRerankSettingTest.php`, Browsertest `tests/e2e/fork-rerank-setting.spec.ts`;
+`ForkAiOptionsRepository::forWrite()`, damit
 Reasoning-Schalter und Reranker beim ersten Speichern eine Zeile sind und nicht zwei.
 
 Änderung an einer Datei des Originals (mit `FORK (FORK.md)` markiert):
@@ -450,8 +452,22 @@ Reasoning-Schalter und Reranker beim ersten Speichern eine Zeile sind und nicht 
 **Datenbank:** Spalte `rerank_url` (TEXT, NULL) in der Fork-Tabelle `fork_ai_options`
 (Abweichung 9), keine Änderung an Tabellen des Originals.
 
-**Grund:** Gemessen mit dem Reranker auf der Arc A380 (2026-11-02): 1,0 s für 50 Treffer zu „Flug“;
-erkennt Buchungsmails, achtet aber nicht aufs Datum (deshalb die Altersgewichtung).
+**Grund:** Die Suche sortiert nach Datum, nicht danach, ob eine Mail die Frage beantwortet. Gemessen
+auf der Arc A380 (2026-11-02, 22 echte Suchen, je 50 Treffer, Noten 0/1/2 vom Schreib-Modell, mit der
+Altersgewichtung oben):
+
+| | Zeit für 50 | nDCG@20 | Treffer in den 20 |
+|---|---|---|---|
+| ohne Reranker | – | 0,644 | 0,587 |
+| Qwen3-Reranker-0.6B INT8 | 1,1 s | 0,825 | – |
+| Qwen3-Reranker-4B INT8 | 5,8 s | 0,836 | 0,792 |
+| **4B INT4, KV-Export, Präfix einmal pro Batch, 16 pro Batch (läuft)** | **2,7 s** | **0,841** | **0,820** |
+
+Der Reranker erkennt Buchungsmails, achtet aber nicht aufs Datum (deshalb die Altersgewichtung; mit
+ihr erreicht „Flug“ 0,918 und „Flüge“ 0,844 statt 0,844 und 0,737 ohne Reranker). Nicht gelohnt
+haben sich: RRF-Mischung mit der Reihenfolge der Suche, eine eigene Anweisung statt der
+Standard-Anweisung, 50 pro Batch (doppelt so langsam), 0.6B mit INT4 (schlechter, kaum schneller).
+**Kandidat fürs Original:** als Idee (dort erst Issue, nur nach Freigabe).
 
 ### 19. Insight-Flugkarte: Uhrzeit aus der Mail ist Ortszeit
 
