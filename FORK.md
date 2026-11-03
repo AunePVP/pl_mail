@@ -483,6 +483,56 @@ Vorhandene Karten korrigiert `app:backfill insights --since=…`.
 **Grund:** Die Karte „In dieser Konversation gefunden“ zeigte einen 15:45-Abflug als 16:45 (2026-11-02).
 **Kandidat fürs Original:** ja, Fehlerbehebung (dort erst Issue, nur nach Freigabe).
 
+### 20. KI-Suche als Chat
+
+Im Suchfeld oben steht rechts der Knopf **„KI-Suche“**. Der Chat braucht den Schalter
+„Zusammenfassungen von Gesprächen“ (`AiFeature::Summary`, wie „Kurz gesagt“); ist er aus, sagt die
+Suchseite das. Der Knopf selbst steht immer da: ihn davon abhängig zu machen, kostete auf jeder Seite
+eine Abfrage (`ThreadListQueryBudgetTest`). Er öffnet die Suchseite mit `fork_ai=1`; über der
+Trefferliste steht dann statt der Felder aus Abweichung 16/18 ein Chat, dessen erste Nachricht der
+Text im Suchfeld ist. Darunter ein Eingabefeld für Rückfragen. Eine Runde (`ForkSearchChat::turn()`):
+
+1. `ForkSearchPlanner`: das Schreib-Modell liest die letzten Nachrichten und die neue und schreibt
+   bis zu 3 kurze Suchen (Wörter, wie sie in solchen Mails stehen, Filter wie `from:`/`after:` nur
+   auf Wunsch) und die Frage, wie sie für sich allein steht („und zurück?“ → „Wann fahre ich von
+   Hamburg zurück?“). Keine Suchen = Antwort aus den Treffern der letzten Runde.
+2. `ForkSearchCandidates::forSearches()`: die Suchen laufen als angemeldeter Nutzer über
+   `MessageThreadRepository::searchPage()` (je bis 25, abwechselnd zusammengelegt, bis 30), dazu die
+   Frage selbst mit der Suche nach Bedeutung; der Reranker (Abweichung 18) ordnet nach der Frage.
+3. Das Modell antwortet aus den besten 15 (Betreff, Absender, Datum, Ausschnitt – nie ganze Mails)
+   und den passenden Terminen (`ForkTripFinder`), gestreamt, mit bis zu 5 Mails zum Öffnen. Nur IDs
+   aus den Treffern werden verlinkt; die Links öffnen die Mail im Lesebereich.
+
+Die Seite liest NDJSON von `POST /mail/search/fork/chat` (CSRF-Token `ajax` aus dem Meta-Tag):
+`conversation`, `search`, `results`, `token`…, `done` oder `error`. Der Verlauf (12 Nachrichten, die
+letzten Treffer) liegt 6 h im Cache unter Nutzer-ID + zufälliger ID, keine Tabelle.
+Gemessen auf der Produktion (2026-11-03, Qwen mit Reasoning aus, Reranker 4B auf der A380, mit 4 Suchen
+und 50 Mails): Planen 1–2 s, jede Wortsuche 0,4–2,6 s (so lange wie im Suchfeld), Suche nach Bedeutung
+1 s, Ranken 3 s für 50; erstes Wort nach 12–15 s. Deshalb höchstens 3 Suchen und 30 Mails fürs Ranken.
+Eine Rückfrage ohne neue Suche („und zurück?“) antwortet nach 3–4 s.
+
+Neue Dateien: `src/Service/Fork/Search/ForkSearchChat.php`, `ForkSearchPlanner.php`,
+`ForkSearchPlan.php`, `src/Controller/Fork/ForkSearchChatController.php`,
+`src/Twig/Fork/ForkSearchChatExtension.php` (`fork_search_chat()`),
+`assets/controllers/fork/search_chat_controller.js`, `ai_search_controller.js`,
+`templates/fork/search/_chat.html.twig`, `_ai_button.html.twig`, Schlüssel `search.fork_chat.*` in
+`translations/fork.*.yaml`, Tests `tests/Controller/Fork/ForkSearchChatTest.php` und
+`tests/e2e/fork-search-chat.spec.ts`. Geändert (nur Fork-Dateien): `ForkSearchCandidates`
+(`forSearches()`, `for()` unverändert im Verhalten), `templates/fork/search/_insight.html.twig`.
+
+Änderung an einer Datei des Originals (mit `FORK (FORK.md)` markiert):
+
+- `templates/_partials/_topbar.html.twig`: ein `include` von `fork/search/_ai_button.html.twig` im
+  Suchfeld, und rechts mehr Innenabstand im Feld (`pr-10 sm:pr-28` statt `pr-4`), damit der Text nicht
+  unter den Knopf läuft.
+
+**Datenbank:** keine Änderung.
+
+**Grund:** Die Suche verlangt, dass jedes Wort in der Mail steht; „wann ist meine Busfahrt nach
+Hamburg“ fand die Busbuchung deshalb nicht (Produktion 2026-11-03: 9 Treffer, nur aus der
+Suche nach Bedeutung, die Buchung nicht dabei).
+**Kandidat fürs Original:** als Idee (dort erst Issue, nur nach Freigabe).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,

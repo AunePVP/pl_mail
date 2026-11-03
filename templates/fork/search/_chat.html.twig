@@ -1,0 +1,82 @@
+{#
+    FORK (FORK.md): the search chat (ForkSearchChat), in place of the panels
+    above the results when the search came from the "KI-Suche" button. What
+    was typed in the box is its first message; fork--search-chat sends it and
+    every message after it, and draws the turns as they stream in.
+
+    The turns are drawn by the controller from <template>s here, so every
+    string is translated in Twig and every value from the server is set as
+    text, never as markup.
+#}
+<div class="px-4 py-3 border-b border-line"
+     data-controller="fork--search-chat"
+     data-fork--search-chat-url-value="{{ path('app_fork_search_chat') }}"
+     data-fork--search-chat-question-value="{{ q }}"
+     data-fork-search-chat>
+    <p class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-accent mb-2">
+        <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+        {{ 'search.fork_chat.heading'|trans({}, 'fork') }}
+    </p>
+
+    <ol class="space-y-3" data-fork--search-chat-target="log" aria-live="polite"></ol>
+
+    <form class="mt-3 flex items-center gap-2" data-action="submit->fork--search-chat#send">
+        <input type="text" name="message" maxlength="500" autocomplete="off"
+               placeholder="{{ 'search.fork_chat.placeholder'|trans({}, 'fork') }}"
+               aria-label="{{ 'search.fork_chat.placeholder'|trans({}, 'fork') }}"
+               data-fork--search-chat-target="input"
+               class="flex-1 min-w-0 px-3 py-1.5 text-sm rounded-lg border border-field-border bg-field text-ink
+                      placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors">
+        <button type="submit" data-fork--search-chat-target="submit"
+                class="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-accent text-accent-ink text-sm font-medium
+                       hover:bg-accent-strong disabled:opacity-50 cursor-pointer transition-colors">
+            <i class="fa-solid fa-paper-plane text-xs" aria-hidden="true"></i>
+            <span class="sr-only sm:not-sr-only">{{ 'search.fork_chat.send'|trans({}, 'fork') }}</span>
+        </button>
+    </form>
+
+    <p class="text-[10px] text-ink-faint mt-1.5">{{ 'search.fork_chat.disclaimer'|trans({}, 'fork') }}</p>
+
+    <template data-fork--search-chat-target="userTemplate">
+        <li class="flex justify-end" data-fork-chat-turn="user">
+            <p class="max-w-[85%] rounded-lg bg-sunken px-3 py-1.5 text-sm text-ink whitespace-pre-line" data-slot="text"></p>
+        </li>
+    </template>
+
+    <template data-fork--search-chat-target="answerTemplate">
+        <li class="rounded-md border border-accent/20 bg-accent-soft/40 px-3 py-2" data-fork-chat-turn="assistant">
+            <p class="flex items-center gap-1.5 text-xs text-ink-faint" data-slot="status">
+                <i class="fa-solid fa-wand-magic-sparkles animate-pulse" aria-hidden="true"></i>
+                <span data-slot="status-text">{{ 'search.fork_chat.thinking'|trans({}, 'fork') }}</span>
+            </p>
+            <p class="text-xs text-ink-faint mt-0.5" data-slot="queries" hidden>
+                {{ 'search.fork_chat.searched_for'|trans({}, 'fork') }} <span data-slot="queries-text" class="text-ink-muted"></span>
+            </p>
+            <p class="text-sm text-ink whitespace-pre-line mt-1" data-slot="text" data-fork-chat-answer hidden></p>
+            <ul class="mt-1.5 space-y-0.5" data-slot="important" data-fork-chat-important hidden></ul>
+            <details class="mt-1.5 text-xs" data-slot="results" hidden>
+                <summary class="cursor-pointer text-ink-muted hover:text-ink" data-slot="results-summary"></summary>
+                <ul class="mt-0.5 pl-4 space-y-0.5" data-slot="results-list"></ul>
+            </details>
+            <p class="text-xs text-danger mt-1" data-slot="error" hidden>{{ 'search.fork_chat.failed'|trans({}, 'fork') }}</p>
+        </li>
+    </template>
+
+    <template data-fork--search-chat-target="linkTemplate">
+        <li class="text-xs truncate">
+            <a href="#" data-action="click->mail--mail-pane#open" class="text-ink-soft hover:text-accent hover:underline">
+                <span class="text-ink-faint" data-slot="date"></span>
+                <span data-slot="subject"></span>
+                <span class="text-ink-faint" data-slot="from"></span>
+            </a>
+        </li>
+    </template>
+
+    <template data-fork--search-chat-target="strings"
+              data-searching="{{ 'search.fork_chat.searching'|trans({}, 'fork') }}"
+              data-writing="{{ 'search.fork_chat.writing'|trans({}, 'fork') }}"
+              data-no-search="{{ 'search.fork_chat.no_search'|trans({}, 'fork') }}"
+              data-found="{{ 'search.fork_chat.found'|trans({}, 'fork') }}"
+              data-found-one="{{ 'search.fork_chat.found_one'|trans({}, 'fork') }}"
+              data-nothing="{{ 'search.fork_chat.nothing'|trans({}, 'fork') }}"></template>
+</div>

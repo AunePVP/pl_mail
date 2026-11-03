@@ -37,6 +37,16 @@ final readonly class ForkSearchCandidates
     /** What the reranker gets to choose from; the page shows fifty too. */
     private const int POOL = 50;
 
+    /** What each of the search chat's searches contributes at most; see forSearches(). */
+    private const int PER_SEARCH = 25;
+
+    /**
+     * The search chat's pool. Smaller than the panels' because the reranker's
+     * time grows with it (3.1 s for 50 on the A380) and the chat's searches
+     * have already spent seconds of their own; its model reads fifteen.
+     */
+    private const int CHAT_POOL = 30;
+
     private const int SNIPPET = 300;
 
     private const int CACHE_SECONDS = 600;
@@ -62,15 +72,94 @@ final readonly class ForkSearchCandidates
      */
     public function for(User $user, ParsedSearchQuery $parsed, string $raw): array
     {
-        $semantic = $this->semantic->forQuery($user, $parsed->freeText);
-        $page     = $this->threads->searchPage($user, $parsed, 1, self::POOL, sort: $user->searchSortOrder, semantic: $semantic);
-        $threads  = array_values(array_filter($page->threads, static fn (mixed $t): bool => $t instanceof MessageThread && null !== $t->id));
+        $threads = $this->search($user, $parsed, self::POOL, true);
 
         if ([] === $threads) {
             return [];
         }
 
-        $highlights = $this->highlights->forPage($threads, $parsed->freeText);
+        return $this->ranked($user, $raw, $parsed->freeText, $this->candidates($threads, $this->highlights->forPage($threads, $parsed->freeText)));
+    }
+
+    /**
+     * The results of several searches as one pool, ordered by how well each
+     * answers the question — for the search chat (ForkSearchChat), whose
+     * searches the chat model wrote.
+     *
+     * Taken in turns, the first of each search, then the second of each, so
+     * a broad search ("rechnung") cannot fill the pool before a narrow one
+     * has had a place. The question itself is searched last, with the
+     * meaning-based arm: its words are rarely all in a mail, its meaning often
+     * is. Each result's fragment is marked with the words of the search that
+     * found it.
+     *
+     * @param list<ParsedSearchQuery> $searches
+     *
+     * @return list<ForkCandidate>
+     */
+    public function forSearches(User $user, array $searches, ParsedSearchQuery $question): array
+    {
+        $lists = [];
+
+        foreach ($searches as $search) {
+            $lists[] = [$this->search($user, $search, self::PER_SEARCH, false), $search->freeText];
+        }
+
+        $lists[] = [$this->search($user, $question, self::PER_SEARCH, true), $question->freeText];
+
+        /** @var array<int, array{MessageThread, string}> $found */
+        $found = [];
+
+        for ($i = 0; $i < self::PER_SEARCH && self::CHAT_POOL > count($found); ++$i) {
+            foreach ($lists as [$threads, $terms]) {
+                $thread = $threads[$i] ?? null;
+
+                if (null !== $thread && self::CHAT_POOL > count($found)) {
+                    $found[(int) $thread->id] ??= [$thread, $terms];
+                }
+            }
+        }
+
+        if ([] === $found) {
+            return [];
+        }
+
+        $byTerms = [];
+
+        foreach ($found as [$thread, $terms]) {
+            $byTerms[$terms][] = $thread;
+        }
+
+        $highlights = [];
+
+        foreach ($byTerms as $terms => $group) {
+            $highlights += $this->highlights->forPage($group, (string) $terms);
+        }
+
+        $threads = array_values(array_map(static fn (array $f): MessageThread => $f[0], $found));
+
+        return $this->ranked($user, "\0chat\0" . $question->freeText, $question->freeText, $this->candidates($threads, $highlights));
+    }
+
+    /**
+     * @return list<MessageThread>
+     */
+    private function search(User $user, ParsedSearchQuery $parsed, int $limit, bool $withMeaning): array
+    {
+        $semantic = true === $withMeaning ? $this->semantic->forQuery($user, $parsed->freeText) : null;
+        $page     = $this->threads->searchPage($user, $parsed, 1, $limit, sort: $user->searchSortOrder, semantic: $semantic);
+
+        return array_values(array_filter($page->threads, static fn (mixed $t): bool => $t instanceof MessageThread && null !== $t->id));
+    }
+
+    /**
+     * @param list<MessageThread>                                $threads
+     * @param array<int, array{subject: mixed, snippet: mixed}> $highlights SearchResultHighlights::forPage()
+     *
+     * @return array<int, ForkCandidate>
+     */
+    private function candidates(array $threads, array $highlights): array
+    {
         $senders    = $this->senders($threads);
         $candidates = [];
 
@@ -85,7 +174,17 @@ final readonly class ForkSearchCandidates
             );
         }
 
-        $scores = $this->scores($user, $raw, $parsed->freeText, $candidates);
+        return $candidates;
+    }
+
+    /**
+     * @param array<int, ForkCandidate> $candidates
+     *
+     * @return list<ForkCandidate>
+     */
+    private function ranked(User $user, string $raw, string $query, array $candidates): array
+    {
+        $scores = $this->scores($user, $raw, $query, $candidates);
 
         if (null === $scores) {
             return array_values($candidates);

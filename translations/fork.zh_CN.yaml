@@ -15,6 +15,23 @@ message:
         hint_mail: "打开一封发往发件人退订地址的邮件"
         hint_body: "在新标签页中打开此邮件正文中的退订链接"
 search:
+    fork_chat:
+        off: "AI 搜索已关闭。开启方法：管理 → AI →“会话摘要”。"
+        button: "AI 搜索"
+        button_hint: "用 AI 搜索：提出问题，AI 会搜索并回答"
+        heading: "AI 搜索"
+        placeholder: "继续提问 …"
+        send: "发送"
+        thinking: "AI 正在考虑要搜索什么 …"
+        searching: "正在搜索 …"
+        no_search: "根据已找到的邮件回答 …"
+        writing: "正在撰写 …"
+        searched_for: "搜索了："
+        found: "找到 %count% 封邮件"
+        found_one: "找到 1 封邮件"
+        nothing: "未找到邮件"
+        failed: "AI 没有回答，请再问一次。"
+        disclaimer: "AI 会自行搜索，只读取主题、发件人、日期和片段——如有疑问，请打开邮件。"
     fork_insight:
         best_heading: "最佳匹配"
         trips_heading: "相关日程"
