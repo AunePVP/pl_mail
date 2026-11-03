@@ -1,0 +1,25 @@
+{#
+    FORK (FORK.md): the search page as the "KI-Suche" button opens it — the
+    chat (ForkSearchChat) where the results would be. SearchController renders
+    this instead of searching for the typed sentence: the chat writes searches
+    of its own, and the list for the sentence was work nobody read.
+
+    Everything else is the search page's own, so the box, the frame and the
+    layout behave as on any search.
+#}
+{% extends 'search/search.html.twig' %}
+
+{% block inbox_tabs %}{% endblock %}
+
+{% block message_list %}
+    <li data-fork-search-insight>
+        {% if fork_search_chat() %}
+            {% include 'fork/search/_chat.html.twig' with { q: q } %}
+        {% else %}
+            <p class="px-4 py-2.5 text-xs text-ink-faint" data-fork-search-chat-off>
+                <i class="fa-solid fa-wand-magic-sparkles mr-1" aria-hidden="true"></i>
+                {{ 'search.fork_chat.off'|trans({}, 'fork') }}
+            </p>
+        {% endif %}
+    </li>
+{% endblock %}

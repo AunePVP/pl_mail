@@ -76,6 +76,21 @@ final class SearchController extends AbstractController
             ]);
         }
 
+        // FORK (FORK.md): the "KI-Suche" chat writes its own searches; the list
+        // for the sentence itself, with its embedding, would be work for nothing.
+        if (true === $request->query->getBoolean('fork_ai')) {
+            return $this->render('fork/search/ai.html.twig', [
+                'q'        => $raw,
+                'threads'  => [],
+                'total'    => 0,
+                'page'     => 1,
+                'per_page' => 50,
+                'parsed'   => $parsed,
+                'sort'     => $sort,
+                'semantic' => null,
+            ]);
+        }
+
         $user = $this->getUser();
 
         // The session lock goes back NOW, before any of the slow work below.

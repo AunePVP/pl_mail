@@ -88,24 +88,26 @@ final readonly class ForkSearchCandidates
      *
      * Taken in turns, the first of each search, then the second of each, so
      * a broad search ("rechnung") cannot fill the pool before a narrow one
-     * has had a place. The question itself is searched last, with the
-     * meaning-based arm: its words are rarely all in a mail, its meaning often
-     * is. Each result's fragment is marked with the words of the search that
-     * found it.
+     * has had a place. Each result's fragment is marked with the words of the
+     * search that found it.
+     *
+     * Words only. The question itself is not searched by meaning: the model
+     * has already turned it into the words such a mail contains, and what the
+     * embedding found for the sentence was mostly newsletters that share its
+     * mood ("Deine Reisewoche startet jetzt" for "welche Busfahrt habe ich
+     * diese Woche"). The question is what the reranker orders by.
      *
      * @param list<ParsedSearchQuery> $searches
      *
      * @return list<ForkCandidate>
      */
-    public function forSearches(User $user, array $searches, ParsedSearchQuery $question): array
+    public function forSearches(User $user, array $searches, string $question): array
     {
         $lists = [];
 
         foreach ($searches as $search) {
             $lists[] = [$this->search($user, $search, self::PER_SEARCH, false), $search->freeText];
         }
-
-        $lists[] = [$this->search($user, $question, self::PER_SEARCH, true), $question->freeText];
 
         /** @var array<int, array{MessageThread, string}> $found */
         $found = [];
@@ -138,7 +140,7 @@ final readonly class ForkSearchCandidates
 
         $threads = array_values(array_map(static fn (array $f): MessageThread => $f[0], $found));
 
-        return $this->ranked($user, "\0chat\0" . $question->freeText, $question->freeText, $this->candidates($threads, $highlights));
+        return $this->ranked($user, "\0chat\0" . $question, $question, $this->candidates($threads, $highlights));
     }
 
     /**
