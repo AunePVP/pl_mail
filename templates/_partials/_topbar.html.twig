@@ -210,8 +210,10 @@
                 {# The field border, not a transparent one: the box sits on the
                    page, and a sunken fill on a pale page gradient was all but
                    flush with it (#303). The border is held to 3:1 on every
-                   page stop for this. #}
-                class="w-full pl-10 pr-4 py-2 text-sm
+                   page stop for this.
+                   FORK (FORK.md): pr-10/sm:pr-28 rather than pr-4, room for
+                   the "KI-Suche" button that sits inside the box. #}
+                class="w-full pl-10 pr-10 sm:pr-28 py-2 text-sm
                        bg-sunken
                        border border-field-border rounded-xl focus:border-transparent
                        text-ink
@@ -220,6 +222,8 @@
                        focus:bg-field
                        transition-colors"
             >
+            {# FORK (FORK.md): the "KI-Suche" button. #}
+            {% include 'fork/search/_ai_button.html.twig' %}
         </div>
 
         {# Three kinds of row, one popup. Recent searches and operator

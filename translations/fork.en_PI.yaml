@@ -15,6 +15,23 @@ message:
         hint_mail: "Opens a letter to the sender's unsubscribe address"
         hint_body: "Opens the unsubscribe link found in this letter's text in a fresh tab"
 search:
+    fork_chat:
+        off: "The parrot be asleep. Wake it: Admin → AI → “Yarn-in-short”."
+        button: "Ask the parrot"
+        button_hint: "Search with the parrot: ask a question, it rummages and answers"
+        heading: "Ask the parrot"
+        placeholder: "Ask it more, matey …"
+        send: "Send"
+        thinking: "The parrot be ponderin' where to dig …"
+        searching: "Rummagin' …"
+        no_search: "Answerin' from the letters already found …"
+        writing: "Scribblin' …"
+        searched_for: "Dug for:"
+        found: "%count% letters found"
+        found_one: "1 letter found"
+        nothing: "Not a letter found"
+        failed: "The parrot said nothin'. Ask again, matey."
+        disclaimer: "The parrot digs on its own and reads only subject, sender, date and a scrap – when in doubt, open the letter."
     fork_insight:
         best_heading: "Finest plunder"
         trips_heading: "On the horizon"

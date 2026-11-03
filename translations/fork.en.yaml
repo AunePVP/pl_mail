@@ -15,6 +15,23 @@ message:
         hint_mail: "Opens a message to the sender's unsubscribe address"
         hint_body: "Opens the unsubscribe link found in this mail's text in a new tab"
 search:
+    fork_chat:
+        off: "AI search is switched off. To switch it on: Admin → AI → “Thread summaries”."
+        button: "AI search"
+        button_hint: "Search with AI: ask a question, the AI searches and answers"
+        heading: "AI search"
+        placeholder: "Ask a follow-up …"
+        send: "Send"
+        thinking: "AI is working out what to search for …"
+        searching: "Searching …"
+        no_search: "Answering from the mails already found …"
+        writing: "Writing …"
+        searched_for: "Searched for:"
+        found: "%count% mails found"
+        found_one: "1 mail found"
+        nothing: "No mail found"
+        failed: "The AI did not answer. Please ask again."
+        disclaimer: "The AI searches on its own and reads only subject, sender, date and a fragment – when in doubt, open the mail."
     fork_insight:
         best_heading: "Best matches"
         trips_heading: "Coming up"

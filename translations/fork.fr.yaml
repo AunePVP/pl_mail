@@ -15,6 +15,23 @@ message:
         hint_mail: "Ouvre un message vers l'adresse de désabonnement de l'expéditeur"
         hint_body: "Ouvre le lien de désabonnement trouvé dans le texte de ce message dans un nouvel onglet"
 search:
+    fork_chat:
+        off: "La recherche IA est désactivée. Pour l'activer : Admin → IA → « Résumés de conversation »."
+        button: "Recherche IA"
+        button_hint: "Rechercher avec l'IA : posez une question, l'IA cherche et répond"
+        heading: "Recherche IA"
+        placeholder: "Poser une autre question …"
+        send: "Envoyer"
+        thinking: "L'IA réfléchit à ce qu'elle doit chercher …"
+        searching: "Recherche …"
+        no_search: "Réponse à partir des e-mails déjà trouvés …"
+        writing: "Rédaction …"
+        searched_for: "Recherché :"
+        found: "%count% e-mails trouvés"
+        found_one: "1 e-mail trouvé"
+        nothing: "Aucun e-mail trouvé"
+        failed: "L'IA n'a pas répondu. Veuillez réessayer."
+        disclaimer: "L'IA cherche elle-même et ne lit que l'objet, l'expéditeur, la date et un extrait – en cas de doute, ouvrez l'e-mail."
     fork_insight:
         best_heading: "Meilleurs résultats"
         trips_heading: "À venir"

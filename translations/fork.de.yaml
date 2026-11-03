@@ -15,6 +15,23 @@ message:
         hint_mail: "Öffnet eine Mail an die Abmeldeadresse des Absenders"
         hint_body: "Öffnet den Abmeldelink aus dem Text dieser Mail in einem neuen Tab"
 search:
+    fork_chat:
+        off: "Die KI-Suche ist ausgeschaltet. Einschalten: Admin → KI → „Zusammenfassungen von Gesprächen“."
+        button: "KI-Suche"
+        button_hint: "Mit der KI suchen: als Frage stellen, die KI sucht und antwortet"
+        heading: "KI-Suche"
+        placeholder: "Weiter fragen …"
+        send: "Senden"
+        thinking: "KI überlegt, wonach sie sucht …"
+        searching: "Sucht …"
+        no_search: "Antwortet aus den gefundenen Mails …"
+        writing: "Schreibt …"
+        searched_for: "Gesucht nach:"
+        found: "%count% Mails gefunden"
+        found_one: "1 Mail gefunden"
+        nothing: "Keine Mail gefunden"
+        failed: "Die KI hat nicht geantwortet. Bitte noch einmal fragen."
+        disclaimer: "Die KI sucht selbst und liest nur Betreff, Absender, Datum und einen Ausschnitt – im Zweifel die Mail öffnen."
     fork_insight:
         best_heading: "Beste Treffer"
         trips_heading: "Termine dazu"
