@@ -498,11 +498,16 @@ Nachricht der Text im Suchfeld ist. Darunter ein Eingabefeld für Rückfragen. E
    bis zu 3 kurze Suchen (Wörter, wie sie in solchen Mails stehen, Filter wie `from:`/`after:` nur
    auf Wunsch) und die Frage, wie sie für sich allein steht („und zurück?“ → „Wann fahre ich von
    Hamburg zurück?“), dazu den gefragten Zeitraum („diese Woche“ = heute bis Sonntag, „was steht an“
-   = heute + 13 Tage, sonst `null`). Keine Suchen = Antwort aus den Treffern der letzten Runde. Eine
-   erste Frage ohne Suchen und ohne Zeitraum sucht ihre eigenen Wörter (ohne Fragewörter).
+   = heute + 13 Tage, auch vergangen: „Dezember 2024“, „2023“; sonst `null`) und ob nach dem Ersten
+   gefragt ist („das erste Mal“, „seit wann“ → `oldest`). Keine Suchen = Antwort aus den Treffern der
+   letzten Runde. Eine erste Frage ohne Suchen und ohne Zeitraum sucht ihre eigenen Wörter (ohne
+   Fragewörter).
 2. `ForkSearchCandidates::forSearches()`: die Suchen laufen als angemeldeter Nutzer über
    `MessageThreadRepository::searchPage()` (je bis 25, abwechselnd zusammengelegt, bis 30), nur nach
-   Wörtern; der Reranker (Abweichung 18) ordnet nach der Frage. Die Frage selbst wird nicht nach
+   Wörtern; der Reranker (Abweichung 18) ordnet nach der Frage. Ein vergangener Zeitraum wird zu
+   `after:`/`before:` jeder Suche (ein kommender nicht: die Buchung für nächste Woche kam vor Wochen);
+   bei `oldest` holt jede Suche ihre ältesten statt ihrer neuesten 25 (die Suche kennt nur „neueste
+   zuerst“, also deren letzte Seiten); in beiden Fällen ohne die Altersgewichtung aus Abweichung 18. Die Frage selbst wird nicht nach
    Bedeutung gesucht: das brachte vor allem Newsletter in Reisestimmung („Deine Reisewoche startet
    jetzt“ zu „welche Busfahrt habe ich diese Woche“).
 3. Das Modell antwortet aus den besten 15 (Betreff, Absender, Datum, Ausschnitt – nie ganze Mails)
@@ -519,7 +524,9 @@ und 50 Mails): Planen 1–2 s, jede Wortsuche 0,4–2,6 s (so lange wie im Suchf
 1 s, Ranken 3 s für 50; erstes Wort nach 12–15 s. Deshalb höchstens 3 Suchen und 30 Mails fürs Ranken.
 Eine Rückfrage ohne neue Suche („und zurück?“) antwortet nach 3–4 s. Ohne die Suche nach Bedeutung
 (2026-11-03, zweite Fassung): erstes Wort nach 5–7 s; „was steht die Woche an“ (nur Kalender) nach
-2,4 s.
+2,4 s. Alte Mail (gleicher Tag): „wann bin ich das erste Mal mit Flixbus gefahren“ fand vorher die
+Buchung vom April 2026, jetzt die älteste FlixBus-Mail im Postfach; „was habe ich im Dezember 2024
+bestellt“ fand vorher nichts, jetzt die Bestellungen des Monats.
 
 `ForkTripFinder` kennt seither auch „bus“/„fernbus“ als Art (Ticket), das gilt auch für „Termine
 dazu“ (Abweichung 16).

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service\Fork\Search;
 
+use App\Domain\DTO\ParsedSearchQuery;
 use App\Entity\Ai\AiFeature;
 use App\Entity\User\User;
 use App\Service\Ai\AiAssistant;
@@ -116,7 +117,7 @@ final readonly class ForkSearchChat
         $results = $state['results'];
 
         if ([] !== $plan->queries || [] === $results) {
-            $results = $this->search($user, $plan, $zone);
+            $results = $this->search($user, $plan, $today);
 
             yield ['type' => 'results', 'items' => array_values(array_map($this->item(...), $results))];
         }
@@ -179,13 +180,26 @@ final readonly class ForkSearchChat
     /**
      * @return array<int, array{id: int, date: ?string, from: ?string, subject: string, text: ?string}>
      */
-    private function search(User $user, ForkSearchPlan $plan, DateTimeZone $zone): array
+    private function search(User $user, ForkSearchPlan $plan, DateTimeImmutable $today): array
     {
-        $found = $this->candidates->forSearches(
-            $user,
-            array_map(fn (string $query) => $this->parser->parse($query), $plan->queries),
-            $plan->question,
-        );
+        $zone = $today->getTimezone();
+        $past = $plan->isPast($today);
+
+        $searches = array_map(function (string $query) use ($plan, $past): ParsedSearchQuery {
+            $parsed = $this->parser->parse($query);
+
+            // Days that are over narrow the mail: "im Dezember 2024 bestellt"
+            // is December's orders, not the newest. Days ahead do not — the
+            // booking for next week's trip came weeks ago.
+            if (true === $past) {
+                $parsed->after  ??= $plan->from;
+                $parsed->before ??= $plan->to?->modify('+1 day');
+            }
+
+            return $parsed;
+        }, $plan->queries);
+
+        $found = $this->candidates->forSearches($user, $searches, $plan->question, $plan->oldest, false === $past && false === $plan->oldest);
 
         $results = [];
 
@@ -294,7 +308,7 @@ final readonly class ForkSearchChat
             You help somebody find things in their own mailbox, in a conversation. With each new message you get the question as it stands on its own, today's date, the days it asks about (period, may be null), their calendar entries (every entry in that period, plus entries matching the question), what was searched for, and the emails the search found (most relevant first; subject, sender, date and a fragment, never the whole mail). Answer with ONE JSON object and nothing else, its keys in this order (the answer is shown while you write it):
             {"answer": "...", "important": [ids]}
 
-            - answer: one to four short sentences in {$language} that answer the message with the concrete facts found in the data (dates, times, numbers, amounts, places). When the question is about what lies ahead, prefer what lies ahead. If the data does not answer it, say so in one sentence and suggest what to ask or search instead. When the question is about a period, go through the calendar entries in it first. Address the person informally ("du" in German). No greeting, nothing that is not in the data.
+            - answer: one to four short sentences in {$language} that answer the message with the concrete facts found in the data (dates, times, numbers, amounts, places). When the question is about what lies ahead, prefer what lies ahead. If the data does not answer it, say so in one sentence and suggest what to ask or search instead. When the question is about a period, go through the calendar entries in it first. When oldest_first is true the results are the oldest matching emails; name the earliest. Address the person informally ("du" in German). No greeting, nothing that is not in the data.
             - important: up to five email ids that back the answer or are worth opening, most useful first. Use only ids from the results or from a calendar entry's mails.
             PROMPT;
 
@@ -328,6 +342,7 @@ final readonly class ForkSearchChat
                 'today'        => $today->format('Y-m-d (l)'),
                 'period'       => null === $plan->from || null === $plan->to ? null : ['from' => $plan->from->format('Y-m-d (l)'), 'to' => $plan->to->format('Y-m-d (l)')],
                 'searched_for' => $plan->queries,
+                'oldest_first' => $plan->oldest,
                 'calendar'     => $events,
                 'results'      => array_values($results),
             ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PRETTY_PRINT | \JSON_INVALID_UTF8_SUBSTITUTE)],

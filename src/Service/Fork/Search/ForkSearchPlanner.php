@@ -39,7 +39,8 @@ final readonly class ForkSearchPlanner
 
     private const int MAX_QUESTION_LENGTH = 300;
 
-    private const string MAX_PERIOD = '+1 year';
+    /** "2023 bis 2025" is a question; a span of decades is a model that did not mean a period. */
+    private const string MAX_PERIOD = '+5 years';
 
     /** Words of a sentence about time that no mail is found by; see ownWords(). */
     private const array FILLER = [
@@ -87,7 +88,7 @@ final readonly class ForkSearchPlanner
             $queries = $this->ownWords($message);
         }
 
-        return new ForkSearchPlan($queries, $question, $from, $to);
+        return new ForkSearchPlan($queries, $question, $from, $to, true === ($decoded['oldest'] ?? false));
     }
 
     /**
@@ -194,11 +195,12 @@ final readonly class ForkSearchPlanner
     {
         $system = <<<PROMPT
             Somebody is searching their own mailbox by talking to you. You get the conversation so far and their new message. Decide what to search for. The search matches whole words in the subject, sender and text of each email (every word of a query must occur; a word also matches its longer forms, "rechnung" finds "Rechnungen"). Answer with ONE JSON object and nothing else:
-            {"queries": ["...", "..."], "question": "...", "period": {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}}
+            {"queries": ["...", "..."], "question": "...", "period": {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}, "oldest": false}
 
-            - queries: one to three searches, best first, that find the emails answering the new message. Each is one to three words that literally appear in such emails: the company or sender ("flixbus", "lufthansa", "amazon"), the kind of mail as its senders word it ("buchungsbestätigung", "rechnung", "bestellung", "ticket"), places and names from the conversation. Several short queries rather than one long one. Words in the language the emails are likely written in. Never question words, filler or verbs like "wann", "ist", "meine", "habe", "zeig". Filters, only when asked for ("letzte Woche", "von Anna", "mit Anhang"; today is given): from:<name or domain>, after:YYYY-MM-DD, before:YYYY-MM-DD, has:attachment, written into the query they narrow ("rechnung from:anna", or "from:anna after:2026-10-27" when there are no words), never as a query of their own. An empty list only when the conversation already found what the new message is about.
+            - queries: one to three searches, best first, that find the emails answering the new message. Each is one to three words that literally appear in such emails: the company or sender ("flixbus", "lufthansa", "amazon"), the kind of mail as its senders word it ("buchungsbestätigung", "rechnung", "bestellung", "ticket"), places and names from the conversation. Several short queries rather than one long one. Words in the language the emails are likely written in. Never question words, filler or verbs like "wann", "ist", "meine", "habe", "zeig", and never a year or a date as a word: a time goes into period. Filters, only when asked for ("letzte Woche", "von Anna", "mit Anhang"; today is given): from:<name or domain>, after:YYYY-MM-DD, before:YYYY-MM-DD, has:attachment, written into the query they narrow ("rechnung from:anna", or "from:anna after:2026-10-27" when there are no words), never as a query of their own. An empty list only when the conversation already found what the new message is about.
             - question: the new message as a question that stands on its own, in its language, with what the conversation says filled in ("und zurück?" after a bus trip to Hamburg becomes "Wann fahre ich mit dem Bus von Hamburg zurück?").
-            - period: the days the message asks about, both included, counted from today: "diese Woche" is today to Sunday, "morgen" is tomorrow, "nächste Woche" is next Monday to Sunday, "was steht an" without a time is today and the next 13 days. null when the message names no time.
+            - period: the days the message asks about, both included, counted from today: "diese Woche" is today to Sunday, "morgen" is tomorrow, "nächste Woche" is next Monday to Sunday, "was steht an" without a time is today and the next 13 days; in the past too: "im Dezember 2024" is 2024-12-01 to 2024-12-31, "2023" is the whole year, "letzten Sommer" is June to August of last year. null when the message names no time.
+            - oldest: true when the message asks for the first, the earliest or since when ("das erste Mal", "seit wann", "wann zum ersten Mal"), else false.
             PROMPT;
 
         $turns = array_map(

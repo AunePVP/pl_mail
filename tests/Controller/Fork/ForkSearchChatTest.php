@@ -245,6 +245,48 @@ final class ForkSearchChatTest extends WebTestCase
         self::assertNull($read['period']);
     }
 
+    /** "was habe ich im Dezember 2024 bestellt": days that are over narrow the mail, not just the calendar. */
+    public function testAPastPeriodNarrowsTheSearches(): void
+    {
+        $this->switchOn();
+        $old = $this->seedThread('Bestellung Schreibtischlampe', '-400 days');
+        $this->seedThread('Bestellung Kaffeebohnen', '-1 day');
+
+        $day          = new DateTimeImmutable('-400 days');
+        $this->plan   = sprintf(
+            '{"queries":["bestellung"],"question":"Was habe ich damals bestellt?","period":{"from":"%s","to":"%s"}}',
+            $day->modify('-3 days')->format('Y-m-d'),
+            $day->modify('+3 days')->format('Y-m-d'),
+        );
+        $this->answer = '{"answer":"Eine Lampe.","important":[]}';
+
+        $frames = $this->turn('was habe ich damals bestellt');
+
+        self::assertSame([$old->id], array_column($this->frame($frames, 'results')['items'], 'id'));
+    }
+
+    /** "das erste Mal": each search's oldest results, which the newest twenty-five do not reach. */
+    public function testTheFirstTimeReadsTheOldestResults(): void
+    {
+        $this->switchOn();
+        $first = $this->seedThread('Fernbus Buchung 1', '-60 days');
+
+        foreach (range(2, 30) as $n) {
+            $this->seedThread('Fernbus Buchung ' . $n, sprintf('-%d days', 60 - $n));
+        }
+
+        $this->plan   = '{"queries":["fernbus"],"question":"Wann bin ich das erste Mal Fernbus gefahren?","oldest":true}';
+        $this->answer = '{"answer":"Vor zwei Monaten.","important":[]}';
+
+        $ids = array_column($this->frame($this->turn('wann bin ich das erste mal fernbus gefahren'), 'results')['items'], 'id');
+        self::assertSame($first->id, $ids[0]);
+
+        // The newest twenty-five alone would not have reached it.
+        $this->plan = '{"queries":["fernbus"],"question":"Welche Fernbusbuchungen habe ich?"}';
+        $ids        = array_column($this->frame($this->turn('welche fernbusbuchungen habe ich'), 'results')['items'], 'id');
+        self::assertNotContains($first->id, $ids);
+    }
+
     /** A first question with no searches from the model searches its own words. */
     public function testAFirstQuestionAlwaysSearches(): void
     {
