@@ -8,8 +8,11 @@ use App\Domain\Enum\Mail\LabelRole;
 use App\Domain\Enum\Mail\MessageCategory;
 use App\Domain\Enum\Mail\ThreadingMethod;
 use App\Entity\Ai\AiSettings;
+use App\Entity\Calendar\CalendarEvent;
+use App\Entity\Calendar\EventSourceLink;
 use App\Entity\Mail\Message;
 use App\Entity\Mail\MessageThread;
+use App\Service\Calendar\CalendarProvisioner;
 use App\Tests\Support\Mail\SeedsMarkerFixtures;
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
@@ -168,7 +171,7 @@ final class ForkSearchChatTest extends WebTestCase
         self::assertSame([], $this->asked);
     }
 
-    public function testTheButtonOpensTheChatInsteadOfThePanels(): void
+    public function testTheButtonOpensTheChatInsteadOfTheResults(): void
     {
         $this->switchOn();
         $this->seedThread('Buchungsbestätigung Fernbus Musterstadt', '-1 day');
@@ -177,11 +180,137 @@ final class ForkSearchChatTest extends WebTestCase
         self::assertSelectorExists('[data-fork-ai-search]');
         self::assertSelectorNotExists('[data-fork-search-chat]');
         self::assertSelectorExists('#fork-search-answer');
+        self::assertStringContainsString('Fernbus Musterstadt', (string) $this->client->getResponse()->getContent());
 
+        // The sentence is not searched: no list, no panels, nothing asked of a model.
+        $this->asked = [];
         $this->client->request('GET', '/mail/search?q=buchungsbest%C3%A4tigung&fork_ai=1');
         self::assertSelectorExists('[data-fork-search-chat]');
         self::assertSelectorNotExists('#fork-search-answer');
         self::assertSelectorNotExists('#fork-search-trips');
+        self::assertStringNotContainsString('Fernbus Musterstadt', (string) $this->client->getResponse()->getContent());
+        self::assertSame([], $this->asked);
+    }
+
+    /** "was steht die Woche an" names no title: the period brings the calendar, every entry in it. */
+    public function testAPeriodBringsEveryCalendarEntryInIt(): void
+    {
+        $this->switchOn();
+        $this->seedEvent('Zahnarzt Dr. Muster', '+2 days 10:00');
+        $this->seedEvent('Konzert im Stadtpark', '+40 days 20:00');
+
+        $today        = new DateTimeImmutable('today');
+        $this->plan   = sprintf(
+            '{"queries":["termin"],"question":"Was steht diese Woche an?","period":{"from":"%s","to":"%s"}}',
+            $today->format('Y-m-d'),
+            $today->modify('+6 days')->format('Y-m-d'),
+        );
+        $this->answer = '{"answer":"Übermorgen der Zahnarzt.","important":[]}';
+
+        $this->turn('was steht die woche an');
+
+        $read = json_decode((string) end($this->asked)['messages'][1]['content'], true);
+        self::assertSame(['Zahnarzt Dr. Muster'], array_column($read['calendar'], 'title'));
+        self::assertStringStartsWith($today->format('Y-m-d'), (string) $read['period']['from']);
+    }
+
+    /** No mail was searched, and the mail an entry was read from is still linked. */
+    public function testTheMailOfACalendarEntryCanBeLinked(): void
+    {
+        $this->switchOn();
+        $booking = $this->seedThread('Ihre Buchung beim Zahnarzt', '-3 days');
+        $event   = $this->seedEvent('Zahnarzt Dr. Muster', '+2 days 10:00');
+        $this->linkEvent($event, $booking);
+
+        $today        = new DateTimeImmutable('today');
+        $this->plan   = sprintf('{"queries":[],"question":"Was steht an?","period":{"from":"%s","to":"%s"}}', $today->format('Y-m-d'), $today->modify('+6 days')->format('Y-m-d'));
+        $this->answer = sprintf('{"answer":"Übermorgen der Zahnarzt.","important":[%d]}', $booking->id);
+
+        $frames = $this->turn('was steht an');
+
+        $read = json_decode((string) end($this->asked)['messages'][1]['content'], true);
+        self::assertSame([$booking->id], $read['calendar'][0]['mails']);
+        self::assertSame([$booking->id], array_column($this->frame($frames, 'done')['important'], 'id'));
+    }
+
+    public function testAPeriodThatDoesNotParseIsNone(): void
+    {
+        $this->switchOn();
+        $this->plan   = '{"queries":["termin"],"question":"Was war gestern?","period":{"from":"gestern","to":"heute"}}';
+        $this->answer = '{"answer":"Nichts.","important":[]}';
+
+        $this->turn('was war gestern');
+
+        $read = json_decode((string) end($this->asked)['messages'][1]['content'], true);
+        self::assertNull($read['period']);
+    }
+
+    /** "was habe ich im Dezember 2024 bestellt": days that are over narrow the mail, not just the calendar. */
+    public function testAPastPeriodNarrowsTheSearches(): void
+    {
+        $this->switchOn();
+        $old = $this->seedThread('Bestellung Schreibtischlampe', '-400 days');
+        $this->seedThread('Bestellung Kaffeebohnen', '-1 day');
+
+        $day          = new DateTimeImmutable('-400 days');
+        $this->plan   = sprintf(
+            '{"queries":["bestellung"],"question":"Was habe ich damals bestellt?","period":{"from":"%s","to":"%s"}}',
+            $day->modify('-3 days')->format('Y-m-d'),
+            $day->modify('+3 days')->format('Y-m-d'),
+        );
+        $this->answer = '{"answer":"Eine Lampe.","important":[]}';
+
+        $frames = $this->turn('was habe ich damals bestellt');
+
+        self::assertSame([$old->id], array_column($this->frame($frames, 'results')['items'], 'id'));
+    }
+
+    /** "das erste Mal": each search's oldest results, which the newest twenty-five do not reach. */
+    public function testTheFirstTimeReadsTheOldestResults(): void
+    {
+        $this->switchOn();
+        $first = $this->seedThread('Fernbus Buchung 1', '-60 days');
+
+        foreach (range(2, 30) as $n) {
+            $this->seedThread('Fernbus Buchung ' . $n, sprintf('-%d days', 60 - $n));
+        }
+
+        $this->plan   = '{"queries":["fernbus"],"question":"Wann bin ich das erste Mal Fernbus gefahren?","oldest":true}';
+        $this->answer = '{"answer":"Vor zwei Monaten.","important":[]}';
+
+        $ids = array_column($this->frame($this->turn('wann bin ich das erste mal fernbus gefahren'), 'results')['items'], 'id');
+        self::assertSame($first->id, $ids[0]);
+
+        // The newest twenty-five alone would not have reached it.
+        $this->plan = '{"queries":["fernbus"],"question":"Welche Fernbusbuchungen habe ich?"}';
+        $ids        = array_column($this->frame($this->turn('welche fernbusbuchungen habe ich'), 'results')['items'], 'id');
+        self::assertNotContains($first->id, $ids);
+    }
+
+    /** A first question with no searches from the model searches its own words. */
+    public function testAFirstQuestionAlwaysSearches(): void
+    {
+        $this->switchOn();
+        $wanted = $this->seedThread('Busfahrt Musterstadt bestätigt', '-1 day');
+
+        $this->plan   = '{"queries":[],"question":"Welche Busfahrt habe ich diese Woche?"}';
+        $this->answer = '{"answer":"Eine.","important":[]}';
+
+        $frames = $this->turn('welche busfahrt habe ich diese woche');
+
+        self::assertSame(['busfahrt'], $this->frame($frames, 'search')['queries']);
+        self::assertSame([$wanted->id], array_column($this->frame($frames, 'results')['items'], 'id'));
+    }
+
+    /** …unless it names a time: the calendar answers that, and its words would find any mail that says "steht". */
+    public function testAQuestionAboutAPeriodNeedsNoSearchOfItsOwnWords(): void
+    {
+        $this->switchOn();
+        $today        = new DateTimeImmutable('today');
+        $this->plan   = sprintf('{"queries":[],"question":"Was steht diese Woche an?","period":{"from":"%s","to":"%s"}}', $today->format('Y-m-d'), $today->modify('+5 days')->format('Y-m-d'));
+        $this->answer = '{"answer":"Nichts.","important":[]}';
+
+        self::assertSame([], $this->frame($this->turn('was steht die woche an'), 'search')['queries']);
     }
 
     /** The button is there regardless (asking would cost every page a query); the page says why nothing happens. */
@@ -281,6 +410,33 @@ final class ForkSearchChatTest extends WebTestCase
         $settings->chatModel      = 'qwen3:30b';
         $settings->summaryEnabled = true;
         $this->em->persist($settings);
+        $this->em->flush();
+    }
+
+    private function seedEvent(string $title, string $when): CalendarEvent
+    {
+        $event           = new CalendarEvent();
+        $event->calendar = self::getContainer()->get(CalendarProvisioner::class)->defaultFor($this->user);
+        $event->usr      = $this->user;
+        $event->uid      = uniqid('fork-', true) . '@plmail';
+        $event->title    = $title;
+        $event->startsAt = new DateTimeImmutable($when);
+        $event->endsAt   = $event->startsAt->modify('+1 hour');
+
+        $this->em->persist($event);
+        $this->em->flush();
+
+        return $event;
+    }
+
+    private function linkEvent(CalendarEvent $event, MessageThread $thread): void
+    {
+        $link            = new EventSourceLink();
+        $link->event     = $event;
+        $link->message   = $thread->messages->first() ?: null;
+        $link->extractor = 'structuredData';
+        $link->dedupKey  = uniqid('fork-', true);
+        $this->em->persist($link);
         $this->em->flush();
     }
 

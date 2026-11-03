@@ -7,6 +7,7 @@ namespace App\Service\Fork\Search;
 use App\Domain\DTO\ParsedSearchQuery;
 use App\Entity\Mail\MessageThread;
 use App\Entity\User\User;
+use App\Domain\Enum\Mail\SearchSortOrder;
 use App\Repository\Mail\MessageThreadRepository;
 use App\Service\Ai\SemanticQuery;
 use App\Service\Search\SearchResultHighlights;
@@ -88,24 +89,34 @@ final readonly class ForkSearchCandidates
      *
      * Taken in turns, the first of each search, then the second of each, so
      * a broad search ("rechnung") cannot fill the pool before a narrow one
-     * has had a place. The question itself is searched last, with the
-     * meaning-based arm: its words are rarely all in a mail, its meaning often
-     * is. Each result's fragment is marked with the words of the search that
-     * found it.
+     * has had a place. Each result's fragment is marked with the words of the
+     * search that found it.
+     *
+     * Words only. The question itself is not searched by meaning: the model
+     * has already turned it into the words such a mail contains, and what the
+     * embedding found for the sentence was mostly newsletters that share its
+     * mood ("Deine Reisewoche startet jetzt" for "welche Busfahrt habe ich
+     * diese Woche"). The question is what the reranker orders by.
+     *
+     * `$oldest` takes each search's oldest results rather than its newest,
+     * for "wann bin ich das erste Mal …": the newest twenty-five of thirty-seven
+     * FlixBus mails did not reach back to the first trip. `$recentFirst` is the
+     * age discount of for(); off when the question is about the past.
      *
      * @param list<ParsedSearchQuery> $searches
      *
      * @return list<ForkCandidate>
      */
-    public function forSearches(User $user, array $searches, ParsedSearchQuery $question): array
+    public function forSearches(User $user, array $searches, string $question, bool $oldest = false, bool $recentFirst = true): array
     {
         $lists = [];
 
         foreach ($searches as $search) {
-            $lists[] = [$this->search($user, $search, self::PER_SEARCH, false), $search->freeText];
+            $lists[] = [
+                true === $oldest ? $this->oldest($user, $search, self::PER_SEARCH) : $this->search($user, $search, self::PER_SEARCH, false),
+                $search->freeText,
+            ];
         }
-
-        $lists[] = [$this->search($user, $question, self::PER_SEARCH, true), $question->freeText];
 
         /** @var array<int, array{MessageThread, string}> $found */
         $found = [];
@@ -138,7 +149,34 @@ final readonly class ForkSearchCandidates
 
         $threads = array_values(array_map(static fn (array $f): MessageThread => $f[0], $found));
 
-        return $this->ranked($user, "\0chat\0" . $question->freeText, $question->freeText, $this->candidates($threads, $highlights));
+        return $this->ranked($user, "\0chat\0" . $question, $question, $this->candidates($threads, $highlights), $recentFirst);
+    }
+
+    /**
+     * A search's oldest results, oldest first. The search sorts newest first
+     * and knows no other order by date, so this asks for its last pages: the
+     * first call says how many there are.
+     *
+     * @return list<MessageThread>
+     */
+    private function oldest(User $user, ParsedSearchQuery $parsed, int $limit): array
+    {
+        $first = $this->threads->searchPage($user, $parsed, 1, $limit, sort: SearchSortOrder::Recent);
+        $pages = (int) ceil($first->total / $limit);
+        $found = $first->threads;
+
+        if (1 < $pages) {
+            $found = $this->threads->searchPage($user, $parsed, $pages, $limit, sort: SearchSortOrder::Recent)->threads;
+
+            // A last page of three is three; the one before makes it a page.
+            if (count($found) < $limit) {
+                $found = [...$this->threads->searchPage($user, $parsed, $pages - 1, $limit, sort: SearchSortOrder::Recent)->threads, ...$found];
+            }
+        }
+
+        $threads = array_values(array_filter($found, static fn (mixed $t): bool => $t instanceof MessageThread && null !== $t->id));
+
+        return array_slice(array_reverse($threads), 0, $limit);
     }
 
     /**
@@ -182,7 +220,7 @@ final readonly class ForkSearchCandidates
      *
      * @return list<ForkCandidate>
      */
-    private function ranked(User $user, string $raw, string $query, array $candidates): array
+    private function ranked(User $user, string $raw, string $query, array $candidates, bool $recentFirst = true): array
     {
         $scores = $this->scores($user, $raw, $query, $candidates);
 
@@ -203,10 +241,12 @@ final readonly class ForkSearchCandidates
         // "Flug", it put July's bookings above last week's. Recent mail is
         // what a search is usually after, so age discounts the order — not
         // the score, which still decides alone whether a result is shown.
+        // Not for a question about the past: "das Hotel 2023" is old by asking.
         $now = time();
 
-        usort($ranked, static fn (ForkCandidate $a, ForkCandidate $b): int
-            => self::weighted($b, $now) <=> self::weighted($a, $now));
+        usort($ranked, static fn (ForkCandidate $a, ForkCandidate $b): int => true === $recentFirst
+            ? self::weighted($b, $now) <=> self::weighted($a, $now)
+            : (float) $b->score <=> (float) $a->score);
 
         // Anything the reranker left out keeps its place behind what it ranked.
         return array_merge($ranked, array_values($candidates));

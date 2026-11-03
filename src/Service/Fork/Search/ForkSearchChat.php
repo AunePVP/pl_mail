@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service\Fork\Search;
 
+use App\Domain\DTO\ParsedSearchQuery;
 use App\Entity\Ai\AiFeature;
 use App\Entity\User\User;
 use App\Service\Ai\AiAssistant;
@@ -26,9 +27,10 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
  *      repository method the results list uses, and the reranker orders what
  *      they found by the question (`results` frame). A message the earlier
  *      results already answer is not searched again.
- *   3. The model answers from those results and the matching calendar
- *      entries, streamed (`token` frames), and names the mails worth opening
- *      (`done` frame).
+ *   3. The model answers from those results and the calendar — every entry
+ *      in the days the message asks about, and those its words match —
+ *      streamed (`token` frames), and names the mails worth opening (`done`
+ *      frame).
  *
  * What the model reads is what the search panels give it: subject, sender,
  * date and the matching fragment, never whole mails. Its answer is trusted
@@ -44,6 +46,9 @@ final readonly class ForkSearchChat
     private const int RESULTS = 15;
 
     private const int IMPORTANT = 5;
+
+    /** Mails per calendar entry the answer may link: the booking and a change or two. */
+    private const int TRIP_MAIL = 3;
 
     private const int MAX_MESSAGE = 500;
 
@@ -112,13 +117,17 @@ final readonly class ForkSearchChat
         $results = $state['results'];
 
         if ([] !== $plan->queries || [] === $results) {
-            $results = $this->search($user, $plan, $zone);
+            $results = $this->search($user, $plan, $today);
 
             yield ['type' => 'results', 'items' => array_values(array_map($this->item(...), $results))];
         }
 
-        $words = implode(' ', [$plan->question, ...array_map(fn (string $q): string => $this->parser->parse($q)->freeText, $plan->queries)]);
-        $trips = $this->trips->find($user, $words);
+        $trips = $this->calendar($user, $plan);
+
+        // What the answer may link: the results, and the mail each calendar
+        // entry was read from — "was steht die Woche an" searches no mail,
+        // and the booking is still the thing worth opening.
+        $linkable = $results + $this->tripMail($trips, $zone);
 
         $tokens = $this->ai->chatStream(AiFeature::Summary, $this->messages($user, $state['turns'], $message, $plan, $results, $trips, $today), self::TEMPERATURE);
 
@@ -154,8 +163,8 @@ final readonly class ForkSearchChat
             // "65544" is as good as 65544; anything else is no id of ours.
             $threadId = true === is_string($threadId) && 1 === preg_match('/^\d+$/', $threadId) ? (int) $threadId : $threadId;
 
-            if (true === is_int($threadId) && true === isset($results[$threadId]) && self::IMPORTANT > count($important)) {
-                $important[$threadId] = $this->item($results[$threadId]);
+            if (true === is_int($threadId) && true === isset($linkable[$threadId]) && self::IMPORTANT > count($important)) {
+                $important[$threadId] = $this->item($linkable[$threadId]);
             }
         }
 
@@ -171,13 +180,26 @@ final readonly class ForkSearchChat
     /**
      * @return array<int, array{id: int, date: ?string, from: ?string, subject: string, text: ?string}>
      */
-    private function search(User $user, ForkSearchPlan $plan, DateTimeZone $zone): array
+    private function search(User $user, ForkSearchPlan $plan, DateTimeImmutable $today): array
     {
-        $found = $this->candidates->forSearches(
-            $user,
-            array_map(fn (string $query) => $this->parser->parse($query), $plan->queries),
-            $this->parser->parse($plan->question),
-        );
+        $zone = $today->getTimezone();
+        $past = $plan->isPast($today);
+
+        $searches = array_map(function (string $query) use ($plan, $past): ParsedSearchQuery {
+            $parsed = $this->parser->parse($query);
+
+            // Days that are over narrow the mail: "im Dezember 2024 bestellt"
+            // is December's orders, not the newest. Days ahead do not — the
+            // booking for next week's trip came weeks ago.
+            if (true === $past) {
+                $parsed->after  ??= $plan->from;
+                $parsed->before ??= $plan->to?->modify('+1 day');
+            }
+
+            return $parsed;
+        }, $plan->queries);
+
+        $found = $this->candidates->forSearches($user, $searches, $plan->question, $plan->oldest, false === $past && false === $plan->oldest);
 
         $results = [];
 
@@ -195,6 +217,61 @@ final readonly class ForkSearchChat
         }
 
         return $results;
+    }
+
+    /**
+     * The calendar entries the answer may name: every one in the days the
+     * message asks about ("was steht die Woche an" has no word a title
+     * contains), and those its words match, by start.
+     *
+     * @return list<ForkTrip>
+     */
+    private function calendar(User $user, ForkSearchPlan $plan): array
+    {
+        $words = implode(' ', [$plan->question, ...array_map(fn (string $q): string => $this->parser->parse($q)->freeText, $plan->queries)]);
+        $trips = [];
+
+        $period = null !== $plan->from && null !== $plan->to ? $this->trips->between($user, $plan->from, $plan->to) : [];
+
+        foreach ([...$period, ...$this->trips->find($user, $words)] as $trip) {
+            $trips[(int) $trip->event->id] ??= $trip;
+        }
+
+        $trips = array_values($trips);
+        usort($trips, static fn (ForkTrip $a, ForkTrip $b): int => $a->event->startsAt <=> $b->event->startsAt);
+
+        return $trips;
+    }
+
+    /**
+     * The conversations the calendar entries were read from, as results
+     * without a fragment.
+     *
+     * @param list<ForkTrip> $trips
+     *
+     * @return array<int, array{id: int, date: ?string, from: ?string, subject: string, text: ?string}>
+     */
+    private function tripMail(array $trips, DateTimeZone $zone): array
+    {
+        $mail = [];
+
+        foreach ($trips as $trip) {
+            foreach (array_slice($trip->mail, 0, self::TRIP_MAIL) as $row) {
+                if (null === $row['thread']) {
+                    continue;
+                }
+
+                $mail[$row['thread']] ??= [
+                    'id'      => $row['thread'],
+                    'date'    => $row['receivedAt']?->setTimezone($zone)->format('Y-m-d'),
+                    'from'    => $row['from'],
+                    'subject' => trim($row['subject']),
+                    'text'    => null,
+                ];
+            }
+        }
+
+        return $mail;
     }
 
     /**
@@ -228,11 +305,11 @@ final readonly class ForkSearchChat
         $language = str_starts_with(mb_strtolower((string) ($user->locale ?? 'de')), 'en') ? 'English' : 'German';
 
         $system = <<<PROMPT
-            You help somebody find things in their own mailbox, in a conversation. With each new message you get the question as it stands on its own, today's date, matching entries from their calendar, what was searched for, and the emails the search found (most relevant first; subject, sender, date and a fragment, never the whole mail). Answer with ONE JSON object and nothing else, its keys in this order (the answer is shown while you write it):
+            You help somebody find things in their own mailbox, in a conversation. With each new message you get the question as it stands on its own, today's date, the days it asks about (period, may be null), their calendar entries (every entry in that period, plus entries matching the question), what was searched for, and the emails the search found (most relevant first; subject, sender, date and a fragment, never the whole mail). Answer with ONE JSON object and nothing else, its keys in this order (the answer is shown while you write it):
             {"answer": "...", "important": [ids]}
 
-            - answer: one to four short sentences in {$language} that answer the message with the concrete facts found in the data (dates, times, numbers, amounts, places). When the question is about what lies ahead, prefer what lies ahead. If the data does not answer it, say so in one sentence and suggest what to ask or search instead. No greeting, nothing that is not in the data.
-            - important: up to five email ids that back the answer or are worth opening, most useful first. Use only ids from the results.
+            - answer: one to four short sentences in {$language} that answer the message with the concrete facts found in the data (dates, times, numbers, amounts, places). When the question is about what lies ahead, prefer what lies ahead. If the data does not answer it, say so in one sentence and suggest what to ask or search instead. When the question is about a period, go through the calendar entries in it first. When oldest_first is true the results are the oldest matching emails; name the earliest. Address the person informally ("du" in German). No greeting, nothing that is not in the data.
+            - important: up to five email ids that back the answer or are worth opening, most useful first. Use only ids from the results or from a calendar entry's mails.
             PROMPT;
 
         $events = array_map(static fn (ForkTrip $trip): array => [
@@ -245,6 +322,10 @@ final readonly class ForkSearchChat
                 : $trip->event->endsAt?->setTimezone($zone)->format('Y-m-d H:i'),
             'location'  => $trip->event->location,
             'confirmed' => false === $trip->isOffer,
+            'mails'     => array_values(array_unique(array_filter(array_map(
+                static fn (array $row): ?int => $row['thread'],
+                array_slice($trip->mail, 0, self::TRIP_MAIL),
+            )))),
         ], $trips);
 
         $history = array_map(
@@ -259,7 +340,9 @@ final readonly class ForkSearchChat
                 'message'      => $message,
                 'question'     => $plan->question,
                 'today'        => $today->format('Y-m-d (l)'),
+                'period'       => null === $plan->from || null === $plan->to ? null : ['from' => $plan->from->format('Y-m-d (l)'), 'to' => $plan->to->format('Y-m-d (l)')],
                 'searched_for' => $plan->queries,
+                'oldest_first' => $plan->oldest,
                 'calendar'     => $events,
                 'results'      => array_values($results),
             ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PRETTY_PRINT | \JSON_INVALID_UTF8_SUBSTITUTE)],

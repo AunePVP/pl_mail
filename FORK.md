@@ -488,20 +488,33 @@ Vorhandene Karten korrigiert `app:backfill insights --since=…`.
 Im Suchfeld oben steht rechts der Knopf **„KI-Suche“**. Der Chat braucht den Schalter
 „Zusammenfassungen von Gesprächen“ (`AiFeature::Summary`, wie „Kurz gesagt“); ist er aus, sagt die
 Suchseite das. Der Knopf selbst steht immer da: ihn davon abhängig zu machen, kostete auf jeder Seite
-eine Abfrage (`ThreadListQueryBudgetTest`). Er öffnet die Suchseite mit `fork_ai=1`; über der
-Trefferliste steht dann statt der Felder aus Abweichung 16/18 ein Chat, dessen erste Nachricht der
-Text im Suchfeld ist. Darunter ein Eingabefeld für Rückfragen. Eine Runde (`ForkSearchChat::turn()`):
+eine Abfrage (`ThreadListQueryBudgetTest`). Er öffnet die Suchseite mit `fork_ai=1`. Dann sucht
+`SearchController` **nicht** nach dem Satz selbst (keine Trefferliste, kein Embedding, keine Felder
+aus Abweichung 16/18), sondern zeigt `templates/fork/search/ai.html.twig` mit dem Chat, dessen erste
+Nachricht der Text im Suchfeld ist. Darunter ein Eingabefeld für Rückfragen. Eine Runde
+(`ForkSearchChat::turn()`):
 
 1. `ForkSearchPlanner`: das Schreib-Modell liest die letzten Nachrichten und die neue und schreibt
    bis zu 3 kurze Suchen (Wörter, wie sie in solchen Mails stehen, Filter wie `from:`/`after:` nur
    auf Wunsch) und die Frage, wie sie für sich allein steht („und zurück?“ → „Wann fahre ich von
-   Hamburg zurück?“). Keine Suchen = Antwort aus den Treffern der letzten Runde.
+   Hamburg zurück?“), dazu den gefragten Zeitraum („diese Woche“ = heute bis Sonntag, „was steht an“
+   = heute + 13 Tage, auch vergangen: „Dezember 2024“, „2023“; sonst `null`) und ob nach dem Ersten
+   gefragt ist („das erste Mal“, „seit wann“ → `oldest`). Keine Suchen = Antwort aus den Treffern der
+   letzten Runde. Eine erste Frage ohne Suchen und ohne Zeitraum sucht ihre eigenen Wörter (ohne
+   Fragewörter).
 2. `ForkSearchCandidates::forSearches()`: die Suchen laufen als angemeldeter Nutzer über
-   `MessageThreadRepository::searchPage()` (je bis 25, abwechselnd zusammengelegt, bis 30), dazu die
-   Frage selbst mit der Suche nach Bedeutung; der Reranker (Abweichung 18) ordnet nach der Frage.
+   `MessageThreadRepository::searchPage()` (je bis 25, abwechselnd zusammengelegt, bis 30), nur nach
+   Wörtern; der Reranker (Abweichung 18) ordnet nach der Frage. Ein vergangener Zeitraum wird zu
+   `after:`/`before:` jeder Suche (ein kommender nicht: die Buchung für nächste Woche kam vor Wochen);
+   bei `oldest` holt jede Suche ihre ältesten statt ihrer neuesten 25 (die Suche kennt nur „neueste
+   zuerst“, also deren letzte Seiten); in beiden Fällen ohne die Altersgewichtung aus Abweichung 18. Die Frage selbst wird nicht nach
+   Bedeutung gesucht: das brachte vor allem Newsletter in Reisestimmung („Deine Reisewoche startet
+   jetzt“ zu „welche Busfahrt habe ich diese Woche“).
 3. Das Modell antwortet aus den besten 15 (Betreff, Absender, Datum, Ausschnitt – nie ganze Mails)
-   und den passenden Terminen (`ForkTripFinder`), gestreamt, mit bis zu 5 Mails zum Öffnen. Nur IDs
-   aus den Treffern werden verlinkt; die Links öffnen die Mail im Lesebereich.
+   und dem Kalender (`ForkTripFinder::between()` für jeden Termin im Zeitraum, `find()` für die
+   passenden), gestreamt, per „du“, mit bis zu 5 Mails zum Öffnen. Verlinkt werden nur IDs aus den
+   Treffern oder den Mails, aus denen ein Termin gelesen wurde; die Links öffnen die Mail im
+   Lesebereich.
 
 Die Seite liest NDJSON von `POST /mail/search/fork/chat` (CSRF-Token `ajax` aus dem Meta-Tag):
 `conversation`, `search`, `results`, `token`…, `done` oder `error`. Der Verlauf (12 Nachrichten, die
@@ -509,19 +522,28 @@ letzten Treffer) liegt 6 h im Cache unter Nutzer-ID + zufälliger ID, keine Tabe
 Gemessen auf der Produktion (2026-11-03, Qwen mit Reasoning aus, Reranker 4B auf der A380, mit 4 Suchen
 und 50 Mails): Planen 1–2 s, jede Wortsuche 0,4–2,6 s (so lange wie im Suchfeld), Suche nach Bedeutung
 1 s, Ranken 3 s für 50; erstes Wort nach 12–15 s. Deshalb höchstens 3 Suchen und 30 Mails fürs Ranken.
-Eine Rückfrage ohne neue Suche („und zurück?“) antwortet nach 3–4 s.
+Eine Rückfrage ohne neue Suche („und zurück?“) antwortet nach 3–4 s. Ohne die Suche nach Bedeutung
+(2026-11-03, zweite Fassung): erstes Wort nach 5–7 s; „was steht die Woche an“ (nur Kalender) nach
+2,4 s. Alte Mail (gleicher Tag): „wann bin ich das erste Mal mit Flixbus gefahren“ fand vorher die
+Buchung vom April 2026, jetzt die älteste FlixBus-Mail im Postfach; „was habe ich im Dezember 2024
+bestellt“ fand vorher nichts, jetzt die Bestellungen des Monats.
+
+`ForkTripFinder` kennt seither auch „bus“/„fernbus“ als Art (Ticket), das gilt auch für „Termine
+dazu“ (Abweichung 16).
 
 Neue Dateien: `src/Service/Fork/Search/ForkSearchChat.php`, `ForkSearchPlanner.php`,
 `ForkSearchPlan.php`, `src/Controller/Fork/ForkSearchChatController.php`,
 `src/Twig/Fork/ForkSearchChatExtension.php` (`fork_search_chat()`),
 `assets/controllers/fork/search_chat_controller.js`, `ai_search_controller.js`,
-`templates/fork/search/_chat.html.twig`, `_ai_button.html.twig`, Schlüssel `search.fork_chat.*` in
+`templates/fork/search/ai.html.twig`, `_chat.html.twig`, `_ai_button.html.twig`, Schlüssel `search.fork_chat.*` in
 `translations/fork.*.yaml`, Tests `tests/Controller/Fork/ForkSearchChatTest.php` und
 `tests/e2e/fork-search-chat.spec.ts`. Geändert (nur Fork-Dateien): `ForkSearchCandidates`
-(`forSearches()`, `for()` unverändert im Verhalten), `templates/fork/search/_insight.html.twig`.
+(`forSearches()`, `for()` unverändert im Verhalten), `ForkTripFinder` (`between()`, `bus`).
 
-Änderung an einer Datei des Originals (mit `FORK (FORK.md)` markiert):
+Änderungen an Dateien des Originals (mit `FORK (FORK.md)` markiert):
 
+- `src/Controller/Mail/SearchController.php`: bei `fork_ai=1` ein früher `return` mit
+  `fork/search/ai.html.twig`, vor der Suche.
 - `templates/_partials/_topbar.html.twig`: ein `include` von `fork/search/_ai_button.html.twig` im
   Suchfeld, und rechts mehr Innenabstand im Feld (`pr-10 sm:pr-28` statt `pr-4`), damit der Text nicht
   unter den Knopf läuft.

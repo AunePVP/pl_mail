@@ -43,6 +43,9 @@ final readonly class ForkTripFinder
 
     private const int MAX_EVENTS = 5;
 
+    /** What between() lists at most: a busy fortnight, not a year. */
+    private const int MAX_PERIOD_EVENTS = 25;
+
     private const int MAX_MAIL = 8;
 
     /** A parking or seat booking may be made a little before the flight is on the calendar's books. */
@@ -79,6 +82,9 @@ final readonly class ForkTripFinder
         'lieferung'  => ExtractionKind::Delivery,
         'sendung'    => ExtractionKind::Delivery,
         'ticket'     => ExtractionKind::Ticket,
+        // A coach booking is read as a ticket (BusReservation in the markup).
+        'bus'        => ExtractionKind::Ticket,
+        'fernbus'    => ExtractionKind::Ticket,
         'konzert'    => ExtractionKind::Ticket,
         'restaurant' => ExtractionKind::Dining,
         'tisch'      => ExtractionKind::Dining,
@@ -88,7 +94,7 @@ final readonly class ForkTripFinder
      * Words of a question rather than of a title. "was habe ich als letztes
      * bestellt" found every flight from Zürich: "ich" is in "Zurich Airport".
      */
-    private const array STOP_WORDS = [
+    public const array STOP_WORDS = [
         'ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr', 'mein', 'meine', 'meinen', 'meiner', 'mir', 'mich',
         'was', 'wer', 'wo', 'wann', 'wie', 'welche', 'welcher', 'welches', 'habe', 'hab', 'hat', 'hatte',
         'ist', 'sind', 'war', 'bin', 'wird', 'als', 'am', 'an', 'auf', 'aus', 'bei', 'bis', 'das', 'dem',
@@ -137,15 +143,54 @@ final readonly class ForkTripFinder
             ->getQuery()
             ->getResult();
 
+        return $this->trips(
+            $user,
+            array_values(array_filter($candidates, fn (CalendarEvent $event): bool => $this->matches($event, $words, $kinds))),
+            self::MAX_EVENTS,
+        );
+    }
+
+    /**
+     * Everything on the calendar between two days, both included — for the
+     * search chat, when a question names a time rather than a thing: "was
+     * steht die Woche an" has no word any title contains.
+     *
+     * @return list<ForkTrip> by start
+     */
+    public function between(User $user, DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        /** @var list<CalendarEvent> $candidates */
+        $candidates = $this->em->createQueryBuilder()
+            ->select('e')
+            ->from(CalendarEvent::class, 'e')
+            ->where('e.usr = :user')
+            // Overlapping the days, so a trip that began yesterday is this week's too.
+            ->andWhere('e.startsAt < :to AND (e.endsAt >= :from OR (e.endsAt IS NULL AND e.startsAt >= :from))')
+            ->andWhere('e.status != :cancelled')
+            ->setParameter('user', $user)
+            ->setParameter('from', $from->setTime(0, 0))
+            ->setParameter('to', $to->setTime(0, 0)->modify('+1 day'))
+            ->setParameter('cancelled', EventStatus::Cancelled)
+            ->orderBy('e.startsAt', 'ASC')
+            ->setMaxResults(200)
+            ->getQuery()
+            ->getResult();
+
+        return $this->trips($user, $candidates, self::MAX_PERIOD_EVENTS);
+    }
+
+    /**
+     * @param list<CalendarEvent> $candidates by start
+     *
+     * @return list<ForkTrip>
+     */
+    private function trips(User $user, array $candidates, int $max): array
+    {
         $events = [];
         $seen   = [];
 
         foreach ($candidates as $event) {
             if (ParticipationStatus::Declined === $event->myParticipation) {
-                continue;
-            }
-
-            if (false === $this->matches($event, $words, $kinds)) {
                 continue;
             }
 
@@ -159,7 +204,7 @@ final readonly class ForkTripFinder
             $seen[$twin] = true;
             $events[]    = $event;
 
-            if (self::MAX_EVENTS <= count($events)) {
+            if ($max <= count($events)) {
                 break;
             }
         }
