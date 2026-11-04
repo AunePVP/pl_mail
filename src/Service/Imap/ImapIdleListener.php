@@ -67,8 +67,16 @@ final class ImapIdleListener
      * connection. RFC 2177 asks for less than 30 minutes, since a server may
      * drop an IDLE that runs longer. The DONE is also the liveness check: a
      * connection that died quietly does not answer it, and is replaced.
+     *
+     * FORK (FORK.md): 5 minutes instead of 29. A connection that dies without a
+     * FIN or RST (a NAT that forgets it, a server that drops it) is only found
+     * by this DONE, so 29 minutes meant up to 29 minutes of new mail waiting
+     * for the scheduled sync. Measured on iCloud: half the mail by IDLE in
+     * 5 s, the slowest after 4 to 14 minutes. The reconnect's SELECT reports
+     * EXISTS, which syncs what was missed. Costs one DONE/IDLE round trip per
+     * folder every 5 minutes.
      */
-    public const int IDLE_REISSUE_SECONDS = 29 * 60;
+    public const int IDLE_REISSUE_SECONDS = 5 * 60;
 
     /**
      * How long one wait on a folder lasts before its loop looks up — to send

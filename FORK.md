@@ -555,6 +555,26 @@ Hamburg“ fand die Busbuchung deshalb nicht (Produktion 2026-11-03: 9 Treffer, 
 Suche nach Bedeutung, die Buchung nicht dabei).
 **Kandidat fürs Original:** als Idee (dort erst Issue, nur nach Freigabe).
 
+### 21. IDLE alle 5 statt 29 Minuten neu anstoßen
+
+`IDLE_REISSUE_SECONDS` in `src/Service/Imap/ImapIdleListener.php` ist 5 Minuten statt 29 (mit
+`FORK (FORK.md)` markiert, eine Zeile plus Kommentar).
+
+**Grund:** Eine Push-Verbindung, die still stirbt (ohne FIN/RST, etwa weil ein NAT sie vergisst
+oder der Server sie fallen lässt), merkt plMail erst am `DONE`, mit dem es IDLE neu anstößt. Bei 29
+Minuten wartete neue Mail bis zum nächsten geplanten Sync. Gemessen am iCloud-Konto über drei Tage
+(Produktion, 2026-11-04): die Hälfte der per IDLE gekommenen Mail nach 5 s, aber 14 Mails später als
+30 s, sieben davon 4–14 Minuten. Eine eigene Testmail kam erst mit dem Sync-Klick. Jetzt bleibt eine
+tote Verbindung höchstens gut 5 Minuten unbemerkt (5 min plus 30 s Wartezeit auf die Antwort zum
+`DONE`). Beim Neuaufbau meldet `SELECT` den Bestand (`EXISTS`), und der Ordner wird synchronisiert.
+Kosten: ein `DONE`/`IDLE` je Ordner alle 5 Minuten.
+
+Nicht abgedeckt: Eine Verbindung, die lebt, aber vom Server nichts mehr gemeldet bekommt. Dafür
+bleibt der geplante Sync (Abfrageintervall des Kontos).
+
+**Datenbank:** keine Änderung.
+**Kandidat fürs Original:** ja (dort erst Issue, nur nach Freigabe).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,
