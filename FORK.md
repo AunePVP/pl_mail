@@ -495,38 +495,58 @@ Nachricht der Text im Suchfeld ist. Darunter ein Eingabefeld für Rückfragen. E
 (`ForkSearchChat::turn()`):
 
 1. `ForkSearchPlanner`: das Schreib-Modell liest die letzten Nachrichten und die neue und schreibt
-   bis zu 3 kurze Suchen (Wörter, wie sie in solchen Mails stehen, Filter wie `from:`/`after:` nur
-   auf Wunsch) und die Frage, wie sie für sich allein steht („und zurück?“ → „Wann fahre ich von
-   Hamburg zurück?“), dazu den gefragten Zeitraum („diese Woche“ = heute bis Sonntag, „was steht an“
-   = heute + 13 Tage, auch vergangen: „Dezember 2024“, „2023“; sonst `null`) und ob nach dem Ersten
-   gefragt ist („das erste Mal“, „seit wann“ → `oldest`). Keine Suchen = Antwort aus den Treffern der
-   letzten Runde. Eine erste Frage ohne Suchen und ohne Zeitraum sucht ihre eigenen Wörter (ohne
-   Fragewörter).
+   **eine** Suche (höchstens 2) aus 8–12 Alternativen in der Syntax der Suche selbst, verbunden mit
+   `or` („bestellung or bestellt or bestellbestätigung or order or ordered or purchase …“), auf
+   Deutsch **und** Englisch und mit allen Wortformen, denn eine Alternative trifft nur genau dieses
+   Wort (bei `or` läuft im Original nur `websearch_to_tsquery`, kein Präfix). Eine Alternative darf
+   aus mehreren Wörtern bestehen, die alle vorkommen müssen („hamburg flixbus or hamburg fernbus“).
+   Für eine bestimmte Sache nur deren Wörter, keine allgemeinen daneben („jacke or jacket or …“,
+   nicht „… or order“). Filter wie `from:` nur auf Wunsch. Dazu die Frage, wie sie für sich allein
+   steht („und zurück?“ → „Wann fahre ich von Hamburg zurück?“), den gefragten Zeitraum („diese
+   Woche“ = heute bis Sonntag, „was steht an“ = heute + 13 Tage, auch vergangen: „Dezember 2024“,
+   „2023“; sonst `null`) und ob nach dem Ersten gefragt ist („das erste Mal“, „seit wann“ →
+   `oldest`). Keine Suchen = Antwort aus den Treffern der letzten Runde. Eine erste Frage ohne Suchen
+   und ohne Zeitraum sucht ihre eigenen Wörter (ohne Fragewörter, bis 4, mit `or`).
+   Der Plan wird **gestreamt gelesen und abgebrochen**, sobald das JSON-Objekt zu ist oder 4000
+   Zeichen überschreitet (Timeout 20 s): Bei einer Rückfrage schrieb Qwen einmal zwei Minuten lang
+   „or …“ bis zum Timeout. Abgebrochen gilt, was sich lesen lässt, sonst die eigenen Wörter.
 2. `ForkSearchCandidates::forSearches()`: die Suchen laufen als angemeldeter Nutzer über
-   `MessageThreadRepository::searchPage()` (je bis 25, abwechselnd zusammengelegt, bis 30), nur nach
-   Wörtern; der Reranker (Abweichung 18) ordnet nach der Frage. Ein vergangener Zeitraum wird zu
-   `after:`/`before:` jeder Suche (ein kommender nicht: die Buchung für nächste Woche kam vor Wochen);
-   bei `oldest` holt jede Suche ihre ältesten statt ihrer neuesten 25 (die Suche kennt nur „neueste
-   zuerst“, also deren letzte Seiten); in beiden Fällen ohne die Altersgewichtung aus Abweichung 18. Die Frage selbst wird nicht nach
-   Bedeutung gesucht: das brachte vor allem Newsletter in Reisestimmung („Deine Reisewoche startet
-   jetzt“ zu „welche Busfahrt habe ich diese Woche“).
-3. Das Modell antwortet aus den besten 15 (Betreff, Absender, Datum, Ausschnitt – nie ganze Mails)
-   und dem Kalender (`ForkTripFinder::between()` für jeden Termin im Zeitraum, `find()` für die
-   passenden), gestreamt, per „du“, mit bis zu 5 Mails zum Öffnen. Verlinkt werden nur IDs aus den
-   Treffern oder den Mails, aus denen ein Termin gelesen wurde; die Links öffnen die Mail im
-   Lesebereich.
+   `MessageThreadRepository::searchPage()` (je 50 – bei weniger als 50 durchsucht das Original bei
+   einem einzelnen Wort zusätzlich jeden Mailtext per `ILIKE`, 3 s –, abwechselnd zusammengelegt, bis
+   40), nur nach Wörtern, **ohne Reranker**, neueste zuerst. Ein vergangener Zeitraum wird zu
+   `after:`/`before:` jeder Suche und die Suche sortiert dann nach Trefferqualität (`Relevance`)
+   statt nach Datum: innerhalb von 2023 füllten sonst 40 Dezember-Newsletter mit „booking“ den Platz,
+   das Hotel fehlte. Ein kommender Zeitraum filtert nicht (die Buchung für nächste Woche kam vor
+   Wochen). Bei `oldest` holt jede Suche ihre ältesten statt ihrer neuesten (die Suche kennt nur
+   „neueste zuerst“, also deren letzte Seiten). Die Frage selbst wird nicht nach Bedeutung gesucht:
+   das brachte vor allem Newsletter in Reisestimmung („Deine Reisewoche startet jetzt“ zu „welche
+   Busfahrt habe ich diese Woche“).
+3. Das Modell antwortet aus allen 40 (Betreff, Absender, Datum, Ausschnitt bis 200 Zeichen, JSON ohne
+   Einrückung – nie ganze Mails) und dem Kalender (`ForkTripFinder::between()` für jeden Termin im
+   Zeitraum, `find()` für die passenden), gestreamt, per „du“, mit bis zu 5 Mails zum Öffnen; bei
+   „zuletzt“ die neuesten bis zu drei mit Datum. Verlinkt werden nur IDs aus den Treffern oder den
+   Mails, aus denen ein Termin gelesen wurde; die Links öffnen die Mail im Lesebereich. Unter
+   „Gesucht nach“ stehen die ersten 6 Alternativen, dann „…“.
 
 Die Seite liest NDJSON von `POST /mail/search/fork/chat` (CSRF-Token `ajax` aus dem Meta-Tag):
 `conversation`, `search`, `results`, `token`…, `done` oder `error`. Der Verlauf (12 Nachrichten, die
 letzten Treffer) liegt 6 h im Cache unter Nutzer-ID + zufälliger ID, keine Tabelle.
-Gemessen auf der Produktion (2026-11-03, Qwen mit Reasoning aus, Reranker 4B auf der A380, mit 4 Suchen
-und 50 Mails): Planen 1–2 s, jede Wortsuche 0,4–2,6 s (so lange wie im Suchfeld), Suche nach Bedeutung
-1 s, Ranken 3 s für 50; erstes Wort nach 12–15 s. Deshalb höchstens 3 Suchen und 30 Mails fürs Ranken.
-Eine Rückfrage ohne neue Suche („und zurück?“) antwortet nach 3–4 s. Ohne die Suche nach Bedeutung
-(2026-11-03, zweite Fassung): erstes Wort nach 5–7 s; „was steht die Woche an“ (nur Kalender) nach
-2,4 s. Alte Mail (gleicher Tag): „wann bin ich das erste Mal mit Flixbus gefahren“ fand vorher die
-Buchung vom April 2026, jetzt die älteste FlixBus-Mail im Postfach; „was habe ich im Dezember 2024
-bestellt“ fand vorher nichts, jetzt die Bestellungen des Monats.
+
+**Warum ohne Reranker, und warum nicht alle Mails ans Modell** (gemessen 2026-11-04 auf der
+Produktion, Qwen auf dem Spark, Reasoning aus): Qwen liest ~1.700 Tokens/s und schreibt ~46/s.
+Alle Mails (48.700) wären ~1,3 Mio. Tokens; schon die Betreffzeilen von 30 Tagen (470 Mails,
+12.000 Tokens) brauchen 7 s, bevor das erste Wort kommt. Der Reranker wählte 15 von 30 für das Modell
+aus und brauchte dafür 2–3 s; 40 kompakte Treffer liest das Modell in ~2 s selbst, urteilt besser und
+kennt anders als der Reranker das Datum. Die Suchen: „bestellung“, „bestellt“, „order“ einzeln
+nacheinander 6,9 s; 15 Alternativen mit `or` in einer Suche 0,5–1,1 s.
+Vorher fand „was habe ich als letztes bestellt“ (Suchen „bestellung“, „bestellt“) zwei von vier
+Bestellungen der letzten Woche, nicht die Jacke, deren Mail „Order … confirmed“ heißt. Jetzt alle
+vier; „und eine Jacke“ direkt die Jacke. Erstes Wort nach 4–6 s (Planen 1,6–3 s, Suche
+0,3–1 s, Lesen ~2 s); „was steht die Woche an“ (nur Kalender) 2,5 s. Stand davor (2026-11-03): mit
+Reranker und bis zu 3 Einzelsuchen 5–7 s, in der allerersten Fassung mit Suche nach Bedeutung 12–15 s.
+Alte Mail: „wann bin ich das erste Mal mit Flixbus gefahren“ findet die älteste FlixBus-Mail im
+Postfach, „was habe ich im Dezember 2024 bestellt“ die Bestellungen des ganzen Monats statt nur
+seiner letzten Tage, „in welchem Hotel war ich 2023“ wieder das Hotel.
 
 `ForkTripFinder` kennt seither auch „bus“/„fernbus“ als Art (Ticket), das gilt auch für „Termine
 dazu“ (Abweichung 16).
@@ -538,7 +558,8 @@ Neue Dateien: `src/Service/Fork/Search/ForkSearchChat.php`, `ForkSearchPlanner.p
 `templates/fork/search/ai.html.twig`, `_chat.html.twig`, `_ai_button.html.twig`, Schlüssel `search.fork_chat.*` in
 `translations/fork.*.yaml`, Tests `tests/Controller/Fork/ForkSearchChatTest.php` und
 `tests/e2e/fork-search-chat.spec.ts`. Geändert (nur Fork-Dateien): `ForkSearchCandidates`
-(`forSearches()`, `for()` unverändert im Verhalten), `ForkTripFinder` (`between()`, `bus`).
+(`forSearches()` ohne Reranker; `for()` für „Beste Treffer“ und „Kurz gesagt“ unverändert, mit
+Reranker), `ForkTripFinder` (`between()`, `bus`).
 
 Änderungen an Dateien des Originals (mit `FORK (FORK.md)` markiert):
 
