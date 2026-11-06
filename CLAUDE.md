@@ -67,6 +67,19 @@ etwas so ist und welcher Fehler damit schon einmal behoben wurde. Lies sie, bevo
   (changelog.d/README.md), mit Präfix `fork-` im Dateinamen.
 - Update vom Original: siehe FORK.md → „Update vom Original“.
 
+## iOS-App
+
+Die iPhone-/iPad-App ist ein eigener Fork, [AunePVP/pl_mail_ios](https://github.com/AunePVP/pl_mail_ios),
+lokal als Unterordner `ios/` dieses Clones (eigenes Git-Repo, hier über `.git/info/exclude`
+ignoriert; fehlt er, `git clone https://github.com/AunePVP/pl_mail_ios.git ios`). Für Arbeit dort
+gilt zusätzlich `ios/CLAUDE.md`; `git`/`gh` dann in `ios/` ausführen.
+
+**Nach jedem Feature, das Nutzer in der Weboberfläche sehen,** vor dem Abschluss fragen, ob es auch
+in die App soll. Wenn ja: Issue in AunePVP/pl_mail_ios mit Label `parity` – was es tut, FORK.md-Nummer
+und PR hier, und ob der Server es schon über JMAP liefert oder dafür erst erweitert werden muss.
+Reine Serveränderungen (Import, Filter, KI im Hintergrund) erreichen die App von selbst und brauchen
+kein Issue.
+
 ## Lokal entwickeln und testen
 
 Wie in CONTRIBUTING.md:
