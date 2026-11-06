@@ -38,15 +38,17 @@ final readonly class ForkSearchCandidates
     /** What the reranker gets to choose from; the page shows fifty too. */
     private const int POOL = 50;
 
-    /** What each of the search chat's searches contributes at most; see forSearches(). */
-    private const int PER_SEARCH = 25;
-
     /**
-     * The search chat's pool. Smaller than the panels' because the reranker's
-     * time grows with it (3.1 s for 50 on the A380) and the chat's searches
-     * have already spent seconds of their own; its model reads fifteen.
+     * What each of the search chat's searches asks for. Fifty, not fewer: the
+     * repository scans every body for a one-word search that fills less than
+     * a page of fifty (searchPage(), SEARCH_RESCUE_BELOW), and a page of
+     * twenty-five never fills one — "bestellt" took 3.4 s that way on the
+     * production mailbox, with 327 results the index had found in 0.1 s.
      */
-    private const int CHAT_POOL = 30;
+    private const int PER_SEARCH = 50;
+
+    /** The search chat's pool; its model reads all of them. */
+    private const int CHAT_POOL = 40;
 
     private const int SNIPPET = 300;
 
@@ -83,37 +85,47 @@ final readonly class ForkSearchCandidates
     }
 
     /**
-     * The results of several searches as one pool, ordered by how well each
-     * answers the question — for the search chat (ForkSearchChat), whose
-     * searches the chat model wrote.
+     * The results of several searches as one pool, newest first — for the
+     * search chat (ForkSearchChat), whose searches the chat model wrote and
+     * whose model reads the whole pool.
      *
      * Taken in turns, the first of each search, then the second of each, so
-     * a broad search ("rechnung") cannot fill the pool before a narrow one
-     * has had a place. Each result's fragment is marked with the words of the
-     * search that found it.
+     * a broad search cannot fill the pool before a narrow one has had a place.
+     * Each result's fragment is marked with the words of the search that
+     * found it.
      *
-     * Words only. The question itself is not searched by meaning: the model
-     * has already turned it into the words such a mail contains, and what the
-     * embedding found for the sentence was mostly newsletters that share its
-     * mood ("Deine Reisewoche startet jetzt" for "welche Busfahrt habe ich
-     * diese Woche"). The question is what the reranker orders by.
+     * Words only, and not reranked. The model has already turned the question
+     * into the words such a mail contains, and what the embedding found for
+     * the sentence was mostly newsletters that share its mood. The reranker
+     * chose fifteen of thirty for the model to read and took 2–3 s to do it;
+     * the model reads forty in less, judges them better, and the reranker
+     * knew nothing of time — "was habe ich als letztes bestellt" is the
+     * newest orders, and it left a week's out (2026-11-04).
      *
      * `$oldest` takes each search's oldest results rather than its newest,
-     * for "wann bin ich das erste Mal …": the newest twenty-five of thirty-seven
-     * FlixBus mails did not reach back to the first trip. `$recentFirst` is the
-     * age discount of for(); off when the question is about the past.
+     * for "wann bin ich das erste Mal …": the newest of thirty-seven FlixBus
+     * mails did not reach back to the first trip. The pool is then oldest
+     * first.
+     *
+     * `$byRank` takes each search's best matches rather than its newest, for a
+     * search the chat has already narrowed to days that are over: within
+     * 2023, "hotel or … or booking" found forty December newsletters that
+     * said "booking", and not the hotel (2026-11-04). The pool is still
+     * newest first — the model reads all of it.
      *
      * @param list<ParsedSearchQuery> $searches
      *
      * @return list<ForkCandidate>
      */
-    public function forSearches(User $user, array $searches, string $question, bool $oldest = false, bool $recentFirst = true): array
+    public function forSearches(User $user, array $searches, bool $oldest = false, bool $byRank = false): array
     {
         $lists = [];
 
         foreach ($searches as $search) {
             $lists[] = [
-                true === $oldest ? $this->oldest($user, $search, self::PER_SEARCH) : $this->search($user, $search, self::PER_SEARCH, false),
+                true === $oldest
+                    ? $this->oldest($user, $search, self::PER_SEARCH)
+                    : $this->search($user, $search, self::PER_SEARCH, false, true === $byRank ? SearchSortOrder::Relevance : SearchSortOrder::Recent),
                 $search->freeText,
             ];
         }
@@ -149,7 +161,11 @@ final readonly class ForkSearchCandidates
 
         $threads = array_values(array_map(static fn (array $f): MessageThread => $f[0], $found));
 
-        return $this->ranked($user, "\0chat\0" . $question, $question, $this->candidates($threads, $highlights), $recentFirst);
+        usort($threads, static fn (MessageThread $a, MessageThread $b): int => true === $oldest
+            ? $a->lastMessageAt <=> $b->lastMessageAt
+            : $b->lastMessageAt <=> $a->lastMessageAt);
+
+        return array_values($this->candidates($threads, $highlights));
     }
 
     /**
@@ -182,10 +198,10 @@ final readonly class ForkSearchCandidates
     /**
      * @return list<MessageThread>
      */
-    private function search(User $user, ParsedSearchQuery $parsed, int $limit, bool $withMeaning): array
+    private function search(User $user, ParsedSearchQuery $parsed, int $limit, bool $withMeaning, ?SearchSortOrder $sort = null): array
     {
         $semantic = true === $withMeaning ? $this->semantic->forQuery($user, $parsed->freeText) : null;
-        $page     = $this->threads->searchPage($user, $parsed, 1, $limit, sort: $user->searchSortOrder, semantic: $semantic);
+        $page     = $this->threads->searchPage($user, $parsed, 1, $limit, sort: $sort ?? $user->searchSortOrder, semantic: $semantic);
 
         return array_values(array_filter($page->threads, static fn (mixed $t): bool => $t instanceof MessageThread && null !== $t->id));
     }
@@ -220,7 +236,7 @@ final readonly class ForkSearchCandidates
      *
      * @return list<ForkCandidate>
      */
-    private function ranked(User $user, string $raw, string $query, array $candidates, bool $recentFirst = true): array
+    private function ranked(User $user, string $raw, string $query, array $candidates): array
     {
         $scores = $this->scores($user, $raw, $query, $candidates);
 
@@ -241,12 +257,9 @@ final readonly class ForkSearchCandidates
         // "Flug", it put July's bookings above last week's. Recent mail is
         // what a search is usually after, so age discounts the order — not
         // the score, which still decides alone whether a result is shown.
-        // Not for a question about the past: "das Hotel 2023" is old by asking.
         $now = time();
 
-        usort($ranked, static fn (ForkCandidate $a, ForkCandidate $b): int => true === $recentFirst
-            ? self::weighted($b, $now) <=> self::weighted($a, $now)
-            : (float) $b->score <=> (float) $a->score);
+        usort($ranked, static fn (ForkCandidate $a, ForkCandidate $b): int => self::weighted($b, $now) <=> self::weighted($a, $now));
 
         // Anything the reranker left out keeps its place behind what it ranked.
         return array_merge($ranked, array_values($candidates));

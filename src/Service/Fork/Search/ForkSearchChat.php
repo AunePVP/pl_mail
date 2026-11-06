@@ -24,9 +24,9 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
  *   1. ForkSearchPlanner reads the conversation and the new message and
  *      writes the searches (`search` frame).
  *   2. ForkSearchCandidates runs them as the signed-in user, through the
- *      repository method the results list uses, and the reranker orders what
- *      they found by the question (`results` frame). A message the earlier
- *      results already answer is not searched again.
+ *      repository method the results list uses, newest first (`results`
+ *      frame). A message the earlier results already answer is not searched
+ *      again.
  *   3. The model answers from those results and the calendar — every entry
  *      in the days the message asks about, and those its words match —
  *      streamed (`token` frames), and names the mails worth opening (`done`
@@ -42,8 +42,18 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
  */
 final readonly class ForkSearchChat
 {
-    /** What the model reads per turn. */
-    private const int RESULTS = 15;
+    /**
+     * What the model reads per turn: the whole pool, not the reranker's
+     * fifteen (see ForkSearchCandidates::forSearches()). Forty of them are
+     * some 4,000 tokens, about two seconds on the Spark.
+     */
+    private const int RESULTS = 40;
+
+    /** Of each result's fragment; the subject says most of it. */
+    private const int FRAGMENT = 200;
+
+    /** Alternatives the page shows under "Gesucht nach"; the search has them all. */
+    private const int SHOWN_WORDS = 6;
 
     private const int IMPORTANT = 5;
 
@@ -112,7 +122,7 @@ final readonly class ForkSearchChat
             return;
         }
 
-        yield ['type' => 'search', 'queries' => $plan->queries];
+        yield ['type' => 'search', 'queries' => $this->shown($plan->queries)];
 
         $results = $state['results'];
 
@@ -199,7 +209,7 @@ final readonly class ForkSearchChat
             return $parsed;
         }, $plan->queries);
 
-        $found = $this->candidates->forSearches($user, $searches, $plan->question, $plan->oldest, false === $past && false === $plan->oldest);
+        $found = $this->candidates->forSearches($user, $searches, $plan->oldest, $past);
 
         $results = [];
 
@@ -212,11 +222,33 @@ final readonly class ForkSearchChat
                 'date'    => $thread->lastMessageAt?->setTimezone($zone)->format('Y-m-d'),
                 'from'    => $candidate->sender,
                 'subject' => trim((string) $thread->subject),
-                'text'    => $candidate->snippet,
+                'text'    => null === $candidate->snippet ? null : mb_substr($candidate->snippet, 0, self::FRAGMENT),
             ];
         }
 
         return $results;
+    }
+
+    /**
+     * The searches as the page names them: their alternatives, the first few.
+     *
+     * @param list<string> $queries
+     *
+     * @return list<string>
+     */
+    private function shown(array $queries): array
+    {
+        $words = [];
+
+        foreach ($queries as $query) {
+            foreach (preg_split('/\s+or\s+/i', $query) ?: [] as $word) {
+                $words[mb_strtolower(trim($word))] ??= trim($word);
+            }
+        }
+
+        $words = array_values(array_filter($words, static fn (string $word): bool => '' !== $word));
+
+        return self::SHOWN_WORDS < count($words) ? [...array_slice($words, 0, self::SHOWN_WORDS), '…'] : $words;
     }
 
     /**
@@ -305,10 +337,10 @@ final readonly class ForkSearchChat
         $language = str_starts_with(mb_strtolower((string) ($user->locale ?? 'de')), 'en') ? 'English' : 'German';
 
         $system = <<<PROMPT
-            You help somebody find things in their own mailbox, in a conversation. With each new message you get the question as it stands on its own, today's date, the days it asks about (period, may be null), their calendar entries (every entry in that period, plus entries matching the question), what was searched for, and the emails the search found (most relevant first; subject, sender, date and a fragment, never the whole mail). Answer with ONE JSON object and nothing else, its keys in this order (the answer is shown while you write it):
+            You help somebody find things in their own mailbox, in a conversation. With each new message you get the question as it stands on its own, today's date, the days it asks about (period, may be null), their calendar entries (every entry in that period, plus entries matching the question), what was searched for, and the emails the search found (newest first, or oldest first when oldest_first is true; subject, sender, date and a fragment, never the whole mail; many will not be about the question). Answer with ONE JSON object and nothing else, its keys in this order (the answer is shown while you write it):
             {"answer": "...", "important": [ids]}
 
-            - answer: one to four short sentences in {$language} that answer the message with the concrete facts found in the data (dates, times, numbers, amounts, places). When the question is about what lies ahead, prefer what lies ahead. If the data does not answer it, say so in one sentence and suggest what to ask or search instead. When the question is about a period, go through the calendar entries in it first. When oldest_first is true the results are the oldest matching emails; name the earliest. Address the person informally ("du" in German). No greeting, nothing that is not in the data.
+            - answer: one to four short sentences in {$language} that answer the message with the concrete facts found in the data (dates, times, numbers, amounts, places). When the question is about what lies ahead, prefer what lies ahead. When it asks for the last or latest, name the newest that fit, up to three, each with its date. If the data does not answer it, say so in one sentence and suggest what to ask or search instead. When the question is about a period, go through the calendar entries in it first. When oldest_first is true the results are the oldest matching emails; name the earliest. Address the person informally ("du" in German). No greeting, nothing that is not in the data.
             - important: up to five email ids that back the answer or are worth opening, most useful first. Use only ids from the results or from a calendar entry's mails.
             PROMPT;
 
@@ -345,7 +377,9 @@ final readonly class ForkSearchChat
                 'oldest_first' => $plan->oldest,
                 'calendar'     => $events,
                 'results'      => array_values($results),
-            ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PRETTY_PRINT | \JSON_INVALID_UTF8_SUBSTITUTE)],
+            // Not pretty-printed: forty results' indentation is some five
+            // hundred tokens the model reads before its first word.
+            ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE)],
         ];
     }
 

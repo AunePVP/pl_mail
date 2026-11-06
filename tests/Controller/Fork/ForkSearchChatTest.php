@@ -24,8 +24,8 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 
 /**
  * FORK (FORK.md): the search chat behind the "KI-Suche" button. The model is a
- * mock: its plan (the unstreamed call) and its answer (the streamed one) are
- * what the test sets.
+ * mock: its plan (the call whose system prompt asks what to search for) and
+ * its answer are what the test sets. Both are streamed.
  */
 final class ForkSearchChatTest extends WebTestCase
 {
@@ -50,11 +50,11 @@ final class ForkSearchChatTest extends WebTestCase
             $body          = json_decode((string) ($options['body'] ?? '{}'), true) ?? [];
             $this->asked[] = $body;
 
-            if (false === ($body['stream'] ?? false)) {
-                return new MockResponse((string) json_encode(['message' => ['content' => $this->plan], 'done' => true]));
-            }
+            $system = (string) ($body['messages'][0]['content'] ?? '');
 
-            return new MockResponse(ForkSearchInsightTest::ollamaStream($this->answer));
+            return new MockResponse(ForkSearchInsightTest::ollamaStream(
+                true === str_contains($system, 'Decide what to search for') ? $this->plan : $this->answer,
+            ));
         }));
 
         $this->em         = $container->get(EntityManagerInterface::class);
@@ -265,13 +265,13 @@ final class ForkSearchChatTest extends WebTestCase
         self::assertSame([$old->id], array_column($this->frame($frames, 'results')['items'], 'id'));
     }
 
-    /** "das erste Mal": each search's oldest results, which the newest twenty-five do not reach. */
+    /** "das erste Mal": each search's oldest results, which the newest forty do not reach. */
     public function testTheFirstTimeReadsTheOldestResults(): void
     {
         $this->switchOn();
         $first = $this->seedThread('Fernbus Buchung 1', '-60 days');
 
-        foreach (range(2, 30) as $n) {
+        foreach (range(2, 45) as $n) {
             $this->seedThread('Fernbus Buchung ' . $n, sprintf('-%d days', 60 - $n));
         }
 
@@ -281,7 +281,7 @@ final class ForkSearchChatTest extends WebTestCase
         $ids = array_column($this->frame($this->turn('wann bin ich das erste mal fernbus gefahren'), 'results')['items'], 'id');
         self::assertSame($first->id, $ids[0]);
 
-        // The newest twenty-five alone would not have reached it.
+        // The newest forty alone would not have reached it.
         $this->plan = '{"queries":["fernbus"],"question":"Welche Fernbusbuchungen habe ich?"}';
         $ids        = array_column($this->frame($this->turn('welche fernbusbuchungen habe ich'), 'results')['items'], 'id');
         self::assertNotContains($first->id, $ids);
@@ -311,6 +311,44 @@ final class ForkSearchChatTest extends WebTestCase
         $this->answer = '{"answer":"Nichts.","important":[]}';
 
         self::assertSame([], $this->frame($this->turn('was steht die woche an'), 'search')['queries']);
+    }
+
+    /**
+     * One search of alternatives finds the mail in either language: the
+     * order whose mail says "Order … confirmed" was missing when the chat
+     * searched "bestellung" and "bestellt".
+     */
+    public function testASearchOfAlternativesFindsEitherWord(): void
+    {
+        $this->switchOn();
+        $german  = $this->seedThread('Bestellung bestätigt: Schreibtischlampe', '-3 days');
+        $english = $this->seedThread('Order AB-1234 confirmed', '-2 days');
+        $this->seedThread('Newsletter mit Angeboten', '-1 day');
+
+        $this->plan   = '{"queries":["bestellung or bestellt or bestellbestätigung or auftragsbestätigung or gekauft or order or ordered or purchase"],"question":"Was habe ich zuletzt bestellt?"}';
+        $this->answer = '{"answer":"Zwei Sachen.","important":[]}';
+
+        $frames = $this->turn('was habe ich als letztes bestellt');
+
+        // Newest first, the newsletter not among them.
+        self::assertSame([$english->id, $german->id], array_column($this->frame($frames, 'results')['items'], 'id'));
+        // The page names the first few alternatives, not all of them.
+        self::assertSame(['bestellung', 'bestellt', 'bestellbestätigung', 'auftragsbestätigung', 'gekauft', 'order', '…'], $this->frame($frames, 'search')['queries']);
+    }
+
+    /** A plan the model does not stop writing is cut off, and the message's own words are searched. */
+    public function testAPlanThatDoesNotEndIsCutOff(): void
+    {
+        $this->switchOn();
+        $wanted = $this->seedThread('Jacke bestellt', '-1 day');
+
+        $this->plan   = '{"queries":["jacke or jacket' . str_repeat(' or coat', 1000);
+        $this->answer = '{"answer":"Eine Jacke.","important":[]}';
+
+        $frames = $this->turn('habe ich eine jacke bestellt');
+
+        self::assertSame('done', $frames[array_key_last($frames)]['type']);
+        self::assertContains($wanted->id, array_column($this->frame($frames, 'results')['items'], 'id'));
     }
 
     /** The button is there regardless (asking would cost every page a query); the page says why nothing happens. */
