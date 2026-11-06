@@ -119,7 +119,10 @@ proves the document is unaltered.
         <div data-mail--pdf-viewer-target="scroller"
              class="relative flex-1 min-h-0 overflow-auto bg-sunken/40 px-4 py-4">
 
-            <div data-mail--pdf-viewer-target="stack" class="mx-auto flex flex-col items-center gap-4"></div>
+            {# FORK (FORK.md 24): w-fit min-w-full, so a page wider than the
+               scroller widens the stack and scrolls; centred in a full-width
+               stack, its left edge would sit out of reach. #}
+            <div data-mail--pdf-viewer-target="stack" class="mx-auto w-fit min-w-full flex flex-col items-center gap-4"></div>
 
             {# The placed signature. A SIBLING of the page stack, not a child of
                it: the reader empties that stack and rebuilds it on every zoom,
