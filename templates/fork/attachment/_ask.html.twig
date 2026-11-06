@@ -1,0 +1,116 @@
+{#
+    FORK (FORK.md): "Anhänge fragen" — a chat about the attachments of one
+    mail (ForkAttachmentChat), rendered into the modal frame.
+
+    With more than one attachment each has a checkbox, all ticked; what is
+    ticked at the first question is what the conversation is about. The
+    turns are drawn by fork--attachment-ask from the <template>s here, so
+    every string is translated in Twig and every value from the server is set
+    as text, never as markup.
+
+    Variables: message, parts (list<MessagePart>), available (bool)
+#}
+<turbo-frame id="modal" class="flex-1 min-h-0 flex flex-col">
+    {% if not available %}
+        <p class="px-6 pb-6 max-md:px-4 text-sm text-ink-soft" data-fork-attachment-ask-off>
+            {{ 'attachment.fork_ask.off'|trans({}, 'fork') }}
+        </p>
+    {% elseif parts is empty %}
+        <p class="px-6 pb-6 max-md:px-4 text-sm text-ink-soft">
+            {{ 'attachment.fork_ask.none'|trans({}, 'fork') }}
+        </p>
+    {% else %}
+        <div class="flex-1 min-h-0 flex flex-col"
+             data-controller="fork--attachment-ask"
+             data-fork--attachment-ask-url-value="{{ path('app_fork_attachment_ask_turn', { id: message.id }) }}"
+             data-fork-attachment-ask>
+
+            <fieldset class="shrink-0 px-6 max-md:px-4 pb-3 border-b border-line" data-fork--attachment-ask-target="parts">
+                <legend class="sr-only">{{ 'attachment.fork_ask.documents'|trans({}, 'fork') }}</legend>
+                <ul class="flex flex-wrap gap-2">
+                    {% for part in parts %}
+                        <li>
+                            <label class="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-sunken border border-line text-xs text-ink-soft {{ parts|length > 1 ? 'cursor-pointer' }}"
+                                   data-part-id="{{ part.id }}">
+                                {% if parts|length > 1 %}
+                                    <input type="checkbox" value="{{ part.id }}" checked class="accent-accent"
+                                           data-fork--attachment-ask-target="part">
+                                {% else %}
+                                    <input type="hidden" value="{{ part.id }}" data-fork--attachment-ask-target="part">
+                                    <i class="fa-solid fa-paperclip text-[11px]" aria-hidden="true"></i>
+                                {% endif %}
+                                <span class="truncate max-w-[16rem]">{{ part.filename ?: 'attachment' }}</span>
+                                <span class="text-ink-faint" data-slot="state"></span>
+                            </label>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </fieldset>
+
+            <div class="flex-1 min-h-0 overflow-y-auto px-6 max-md:px-4 py-3" data-fork--attachment-ask-target="scroller">
+                <div class="flex flex-wrap gap-2" data-fork--attachment-ask-target="suggestions">
+                    {% for key in ['summary', 'amounts', 'todo'] %}
+                        <button type="button"
+                                data-action="fork--attachment-ask#suggest"
+                                data-question="{{ ('attachment.fork_ask.suggest.' ~ key)|trans({}, 'fork') }}"
+                                class="px-3 py-1.5 rounded-full border border-line text-xs text-ink-soft hover:bg-hover hover:text-ink transition-colors cursor-pointer">
+                            {{ ('attachment.fork_ask.suggest.' ~ key)|trans({}, 'fork') }}
+                        </button>
+                    {% endfor %}
+                </div>
+
+                <ol class="space-y-3" data-fork--attachment-ask-target="log" aria-live="polite"></ol>
+            </div>
+
+            <div class="shrink-0 px-6 max-md:px-4 pt-3 pb-5 border-t border-line">
+                <form class="flex items-end gap-2" data-action="submit->fork--attachment-ask#send">
+                    <textarea name="message" rows="1" maxlength="1000" autocomplete="off"
+                              placeholder="{{ 'attachment.fork_ask.placeholder'|trans({}, 'fork') }}"
+                              aria-label="{{ 'attachment.fork_ask.placeholder'|trans({}, 'fork') }}"
+                              data-fork--attachment-ask-target="input"
+                              data-action="keydown->fork--attachment-ask#key"
+                              class="flex-1 min-w-0 resize-none px-3 py-1.5 text-sm rounded-lg border border-field-border bg-field text-ink
+                                     placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-colors"></textarea>
+                    <button type="submit" data-fork--attachment-ask-target="submit"
+                            class="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-accent text-accent-ink text-sm font-medium
+                                   hover:bg-accent-strong disabled:opacity-50 cursor-pointer transition-colors">
+                        <i class="fa-solid fa-paper-plane text-xs" aria-hidden="true"></i>
+                        <span class="sr-only sm:not-sr-only">{{ 'attachment.fork_ask.send'|trans({}, 'fork') }}</span>
+                    </button>
+                </form>
+                <p class="text-[10px] text-ink-faint mt-1.5">{{ 'attachment.fork_ask.disclaimer'|trans({}, 'fork') }}</p>
+            </div>
+
+            <template data-fork--attachment-ask-target="userTemplate">
+                <li class="flex justify-end" data-fork-ask-turn="user">
+                    <p class="max-w-[85%] rounded-lg bg-sunken px-3 py-1.5 text-sm text-ink whitespace-pre-line" data-slot="text"></p>
+                </li>
+            </template>
+
+            <template data-fork--attachment-ask-target="answerTemplate">
+                <li class="rounded-md border border-accent/20 bg-accent-soft/40 px-3 py-2" data-fork-ask-turn="assistant">
+                    <p class="flex items-center gap-1.5 text-xs text-ink-faint" data-slot="status">
+                        <i class="fa-solid fa-wand-magic-sparkles animate-pulse" aria-hidden="true"></i>
+                        <span data-slot="status-text">{{ 'attachment.fork_ask.reading'|trans({}, 'fork') }}</span>
+                    </p>
+                    <p class="text-sm text-ink whitespace-pre-line mt-1" data-slot="text" data-fork-ask-answer hidden></p>
+                    <p class="text-xs text-danger mt-1" data-slot="error" hidden></p>
+                </li>
+            </template>
+
+            <template data-fork--attachment-ask-target="strings"
+                      data-writing="{{ 'attachment.fork_ask.writing'|trans({}, 'fork') }}"
+                      data-thinking="{{ 'attachment.fork_ask.thinking'|trans({}, 'fork') }}"
+                      data-failed="{{ 'attachment.fork_ask.failed'|trans({}, 'fork') }}"
+                      data-unreadable="{{ 'attachment.fork_ask.unreadable'|trans({}, 'fork') }}"
+                      data-nothing-chosen="{{ 'attachment.fork_ask.nothing_chosen'|trans({}, 'fork') }}"
+                      data-state-text="{{ 'attachment.fork_ask.state.text'|trans({}, 'fork') }}"
+                      data-state-pages="{{ 'attachment.fork_ask.state.pages'|trans({}, 'fork') }}"
+                      data-state-images="{{ 'attachment.fork_ask.state.images'|trans({}, 'fork') }}"
+                      data-state-truncated="{{ 'attachment.fork_ask.state.truncated'|trans({}, 'fork') }}"
+                      data-state-scan="{{ 'attachment.fork_ask.state.scan'|trans({}, 'fork') }}"
+                      data-state-unsupported="{{ 'attachment.fork_ask.state.unsupported'|trans({}, 'fork') }}"
+                      data-state-failed="{{ 'attachment.fork_ask.state.failed'|trans({}, 'fork') }}"></template>
+        </div>
+    {% endif %}
+</turbo-frame>

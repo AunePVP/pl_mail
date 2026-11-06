@@ -8,6 +8,35 @@ admin:
         fork_rerank:
             ok: "Reranker antwortet in %ms% ms (Treffer %match%, Nicht-Treffer %miss%)."
             failed: "Reranker antwortet nicht wie erwartet: %error%"
+attachment:
+    fork_ask:
+        title: "Anhänge fragen"
+        button: "KI fragen"
+        button_hint: "Die KI liest die Anhänge und beantwortet Fragen dazu"
+        off: "„KI fragen“ ist ausgeschaltet. Einschalten: Admin → KI → „Zusammenfassungen von Gesprächen“."
+        none: "Diese Mail hat keine Anhänge, die die KI lesen kann."
+        documents: "Anhänge"
+        placeholder: "Frage zu den Anhängen …"
+        send: "Senden"
+        reading: "Liest die Anhänge …"
+        thinking: "Liest und überlegt …"
+        writing: "Schreibt …"
+        failed: "Die KI hat nicht geantwortet. Bitte noch einmal fragen."
+        unreadable: "Keiner der gewählten Anhänge ließ sich lesen."
+        nothing_chosen: "Bitte mindestens einen Anhang auswählen."
+        disclaimer: "Die KI liest die ganzen Anhänge – Beträge und Fristen im Zweifel im Dokument prüfen."
+        suggest:
+            summary: "Fass das zusammen"
+            amounts: "Welche Beträge und Fristen stehen drin?"
+            todo: "Was muss ich tun?"
+        state:
+            text: "gelesen"
+            pages: "%count% Seiten gelesen"
+            images: "als Bild gelesen"
+            truncated: "nur der Anfang"
+            scan: "Scan, nicht lesbar"
+            unsupported: "Dateityp nicht lesbar"
+            failed: "nicht lesbar"
 message:
     fork_unsubscribe:
         label: "Abmelden"

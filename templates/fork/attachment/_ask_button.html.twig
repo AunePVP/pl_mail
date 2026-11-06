@@ -1,0 +1,25 @@
+{#
+    FORK (FORK.md): "KI fragen" at the end of a mail's attachment chips. Opens
+    the chat about the attachments (fork/attachment/_ask.html.twig) in the
+    modal. Behind the Summary switch, like the other chats of this fork;
+    ai_summary_enabled() is the thread view's own question, asked anyway for
+    the conversation summary.
+
+    Variables: message
+#}
+{% if ai_summary_enabled() %}
+    <button type="button"
+            data-controller="ui--modal"
+            data-action="click->ui--modal#open"
+            data-ui--modal-size-value="wide"
+            data-ui--modal-src-value="{{ path('app_fork_attachment_ask', { id: message.id }) }}"
+            data-ui--modal-title-value="{{ 'attachment.fork_ask.title'|trans({}, 'fork') }}"
+            title="{{ 'attachment.fork_ask.button_hint'|trans({}, 'fork') }}"
+            data-fork-attachment-ask-button
+            class="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium
+                   bg-accent-soft text-accent hover:bg-accent hover:text-accent-ink transition-colors cursor-pointer
+                   focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        <i class="fa-solid fa-wand-magic-sparkles text-[11px]" aria-hidden="true"></i>
+        {{ 'attachment.fork_ask.button'|trans({}, 'fork') }}
+    </button>
+{% endif %}

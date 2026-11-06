@@ -8,6 +8,35 @@ admin:
         fork_rerank:
             ok: "Reranker hailed back in %ms% ms (match %match%, miss %miss%)."
             failed: "The reranker didn't answer as it ought: %error%"
+attachment:
+    fork_ask:
+        title: "Ask about yer attachments"
+        button: "Ask th' AI"
+        button_hint: "Th' AI reads the attachments an' answers yer questions"
+        off: "“Ask th' AI” be switched off. Switch it on: Admin → AI → “Conversation summaries”."
+        none: "This letter carries no attachments th' AI can read."
+        documents: "Attachments"
+        placeholder: "Ask about th' attachments …"
+        send: "Send"
+        reading: "Readin' th' attachments …"
+        thinking: "Readin' an' ponderin' …"
+        writing: "Scribblin' …"
+        failed: "Th' AI gave no answer. Ask again, matey."
+        unreadable: "None o' the chosen attachments could be read."
+        nothing_chosen: "Choose at least one attachment, matey."
+        disclaimer: "Th' AI reads the whole attachments – check amounts an' deadlines in the document when in doubt."
+        suggest:
+            summary: "Sum it up"
+            amounts: "What amounts an' deadlines be in it?"
+            todo: "What must I do?"
+        state:
+            text: "read"
+            pages: "%count% pages read"
+            images: "read as a picture"
+            truncated: "beginnin' only"
+            scan: "scan, not readable"
+            unsupported: "file type not readable"
+            failed: "not readable"
 message:
     fork_unsubscribe:
         label: "Abandon ship"

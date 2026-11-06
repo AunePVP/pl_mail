@@ -297,6 +297,8 @@ Variables:
                         {% include 'mail/_attachment_chip.html.twig' with { part: part } %}
                     {% endif %}
                 {% endfor %}
+                {# FORK (FORK.md): "KI fragen" — ask the model about these attachments. #}
+                {% include 'fork/attachment/_ask_button.html.twig' with { message: message } only %}
             </div>
         {% endif %}
 

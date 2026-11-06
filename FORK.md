@@ -653,6 +653,56 @@ Geändert (markiert): `assets/controllers/mail/pdf_viewer_controller.js`,
 **Grund:** Pläne als PDF-Anhang waren in der Vorschau unbrauchbar.
 **Kandidat fürs Original:** ja, Fehlerbehebung (dort erst Issue, nur nach Freigabe).
 
+### 25. KI fragt die Anhänge („KI fragen“)
+
+Neben den Anhängen einer Mail (Gesprächsansicht und Einzelansicht) steht der Knopf **„KI fragen“**.
+Er öffnet einen Dialog mit einem Chat über die Anhänge dieser Mail: „Was kostet das?“, „Bis wann muss
+ich zahlen?“, „Fass den Vertrag zusammen“. Drei Vorschläge stehen als Knöpfe da. Bei mehreren Anhängen
+hat jeder ein Häkchen; was bei der ersten Frage angehakt ist, gilt für das ganze Gespräch. Neben jedem
+Namen steht danach, was gelesen wurde („3 Seiten gelesen“, „als Bild gelesen“, „nur der Anfang“,
+„Dateityp nicht lesbar“). Hinter dem Schalter „Zusammenfassungen von Gesprächen“
+(`AiFeature::Summary`) wie die anderen Chats des Forks; ist er aus, steht der Knopf nicht da.
+
+Anders als die KI-Suche (Abweichung 20) liest das Modell hier **das ganze Dokument**:
+
+- **PDF:** `pdftotext -layout` mit einer Marke je Seite („--- Seite 3 ---“), damit die Antwort die
+  Seite nennen kann. Hat ein PDF weniger als 40 Buchstaben je Seite, ist es ein Scan: die ersten
+  6 Seiten gehen mit `pdftoppm` als Bilder (1600 px) ans Modell.
+- **Word, Excel, PowerPoint, OpenDocument** (`docx`, `xlsx`, `pptx`, `odt`, `ods`, `odp`): das XML
+  im ZIP, Absätze als Zeilen, Zellen durch Tabs.
+- **Text, CSV, HTML, JSON, XML, ICS, EML:** wie sie sind (HTML ohne Tags).
+- **Fotos** (JPEG, PNG, WebP, GIF): als Bild, auf 1600 px verkleinert.
+- Alles andere (ZIP, DWG, …) und verschlüsselte Teile (`sealed`): „nicht lesbar“.
+
+Grenzen: 150 000 Zeichen je Dokument (~40 000 Tokens), 240 000 für alle zusammen, 8 Bilder, Dateien
+bis 40 MB. Bilder gehen nur an einen OpenAI-kompatiblen Server (vLLM, wie auf dem Spark: das Modell dort
+liest Bilder); über Ollama sind Fotos und Scans „nicht lesbar“. Der Text eines Anhangs liegt 7 Tage im
+Cache (nach Teil-ID; die Bytes eines Anhangs ändern sich nie), Bilder werden jedes Mal neu erzeugt.
+Die Dokumente stehen in der ersten Nachricht ans Modell, vor der ersten Frage, und jede Rückfrage
+schickt diese Nachricht unverändert mit: der Präfix-Cache von vLLM liest sie dann einmal je Gespräch.
+Verlauf (16 Nachrichten, gewählte Anhänge) 6 h im Cache unter Nutzer, Mail und zufälliger ID, keine
+Tabelle. Antwort gestreamt (NDJSON: `conversation`, `documents`, `token`…, `done` oder `error`).
+
+Neue Dateien: `src/Service/Fork/Attachment/ForkAttachmentReader.php`, `ForkAttachmentContent.php`,
+`ForkAttachmentChat.php`, `src/Controller/Fork/ForkAttachmentAskController.php` (Routen
+`GET/POST /mail/message/{id}/fork/ask`), `templates/fork/attachment/_ask.html.twig`,
+`_ask_button.html.twig`, `assets/controllers/fork/attachment_ask_controller.js`, Schlüssel
+`attachment.fork_ask.*` in `translations/fork.*.yaml`, Test
+`tests/Controller/Fork/ForkAttachmentAskTest.php`, Browsertest `tests/e2e/fork-attachment-ask.spec.ts`.
+
+Änderungen an Dateien des Originals (mit `FORK (FORK.md)` markiert):
+
+- `Dockerfile`: Paket `poppler-utils` (`pdftotext`, `pdftoppm`; ~5 MB) in der apt-Zeile.
+- `src/Service/Ai/OpenAiClient.php` (`payload()`): ist `content` eine Liste von Teilen (Text und
+  Bilder), geht sie unverändert raus statt durch `utf8()`.
+- `templates/mail/_thread_message.html.twig`, `templates/mail/_message_content.html.twig`: je ein
+  `include` von `fork/attachment/_ask_button.html.twig` hinter den Anhängen.
+
+**Datenbank:** keine Änderung.
+**Grund:** Wunsch der Nutzer: Fragen zu Rechnungen, Angeboten und Plänen im Anhang beantworten lassen,
+ohne das PDF selbst durchzusehen.
+**Kandidat fürs Original:** als Idee (dort erst Issue, nur nach Freigabe).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,
