@@ -54,6 +54,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	file \
 	gettext \
 	git \
+	# FORK (FORK.md): pdftotext/pdftoppm, for asking the AI about PDF attachments (ForkAttachmentReader).
+	poppler-utils \
 	&& rm -rf /var/lib/apt/lists/*
 
 # pg_dump, for `app:backup`.

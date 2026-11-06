@@ -8,6 +8,35 @@ admin:
         fork_rerank:
             ok: "Le reclasseur a répondu en %ms% ms (pertinent %match%, non pertinent %miss%)."
             failed: "Le reclasseur n'a pas répondu comme prévu : %error%"
+attachment:
+    fork_ask:
+        title: "Interroger les pièces jointes"
+        button: "Demander à l’IA"
+        button_hint: "L’IA lit les pièces jointes et répond à vos questions"
+        off: "« Demander à l’IA » est désactivé. Activer : Admin → IA → « Résumés de conversations »."
+        none: "Ce message n’a aucune pièce jointe lisible par l’IA."
+        documents: "Pièces jointes"
+        placeholder: "Question sur les pièces jointes …"
+        send: "Envoyer"
+        reading: "Lecture des pièces jointes …"
+        thinking: "Lecture et réflexion …"
+        writing: "Rédaction …"
+        failed: "L’IA n’a pas répondu. Veuillez reposer la question."
+        unreadable: "Aucune des pièces jointes choisies n’a pu être lue."
+        nothing_chosen: "Choisissez au moins une pièce jointe."
+        disclaimer: "L’IA lit les pièces jointes en entier – en cas de doute, vérifiez montants et délais dans le document."
+        suggest:
+            summary: "Résume ceci"
+            amounts: "Quels montants et délais y figurent ?"
+            todo: "Que dois-je faire ?"
+        state:
+            text: "lu"
+            pages: "%count% pages lues"
+            images: "lu comme image"
+            truncated: "début seulement"
+            scan: "scan, illisible"
+            unsupported: "type de fichier illisible"
+            failed: "illisible"
 message:
     fork_unsubscribe:
         label: "Se désabonner"

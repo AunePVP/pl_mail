@@ -8,6 +8,35 @@ admin:
         fork_rerank:
             ok: "重排序器在 %ms% 毫秒内应答（匹配 %match%，不匹配 %miss%）。"
             failed: "重排序器的应答不符合预期：%error%"
+attachment:
+    fork_ask:
+        title: "询问附件"
+        button: "问 AI"
+        button_hint: "AI 阅读附件并回答相关问题"
+        off: "“问 AI”已关闭。开启：管理 → AI → “会话摘要”。"
+        none: "此邮件没有 AI 可读取的附件。"
+        documents: "附件"
+        placeholder: "关于附件的问题 …"
+        send: "发送"
+        reading: "正在读取附件 …"
+        thinking: "正在阅读和思考 …"
+        writing: "正在撰写 …"
+        failed: "AI 没有回答。请重新提问。"
+        unreadable: "所选附件均无法读取。"
+        nothing_chosen: "请至少选择一个附件。"
+        disclaimer: "AI 会阅读完整附件——如有疑问，请在文档中核对金额和期限。"
+        suggest:
+            summary: "总结一下"
+            amounts: "其中有哪些金额和期限？"
+            todo: "我需要做什么？"
+        state:
+            text: "已读取"
+            pages: "已读取 %count% 页"
+            images: "作为图片读取"
+            truncated: "仅开头部分"
+            scan: "扫描件，无法读取"
+            unsupported: "文件类型无法读取"
+            failed: "无法读取"
 message:
     fork_unsubscribe:
         label: "退订"

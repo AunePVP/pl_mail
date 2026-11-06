@@ -477,7 +477,9 @@ final readonly class OpenAiClient
     }
 
     /**
-     * @param list<array{role: string, content: string}> $messages
+     * FORK (FORK.md): content may also be a list of parts (text and pictures).
+     *
+     * @param list<array{role: string, content: string|list<array<string, mixed>>}> $messages
      *
      * @return array<string, mixed>
      */
@@ -488,7 +490,8 @@ final readonly class OpenAiClient
             'messages' => array_map(
                 fn (array $message): array => [
                     'role'    => $message['role'],
-                    'content' => $this->utf8($message['content'], $model),
+                    // FORK (FORK.md): a list of content parts (text and pictures, ForkAttachmentChat) goes as it is.
+                    'content' => true === is_array($message['content']) ? $message['content'] : $this->utf8($message['content'], $model),
                 ],
                 $messages,
             ),
