@@ -2735,6 +2735,8 @@ list:
     sort:
         newest: Newest first
         oldest: Oldest first
+        # FORK (FORK.md 23)
+        unread: Unread first
 
 login:
     form:

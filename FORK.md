@@ -612,6 +612,26 @@ Tests `tests/Jmap/Method/Fork/`. Keine Änderung an Dateien des Originals (Metho
 **Grund:** Die iOS-App spricht nur JMAP; ohne diese Methoden fehlten ihr Abmelden-Knopf und KI-Suche.
 **Kandidat fürs Original:** nein (hängt an Abweichungen 13, 16, 18).
 
+### 23. Sortierung „Ungelesene zuerst“
+
+Im Sortiermenü jeder Mailliste (Posteingang, Ordner, Labels, Alle Nachrichten, Markiert …) gibt es
+neben „Neueste zuerst“ und „Älteste zuerst“ eine dritte Wahl **„Ungelesene zuerst“**: Gespräche mit
+ungelesener Mail oben, darunter die gelesenen, beide Gruppen nach Datum (neueste zuerst). Gemerkt
+wird die Wahl wie die beiden anderen in der Sitzung (`mail.list_sort`).
+
+Ungelesen heißt `unreadCount > 0`, derselbe Test wie Zähler und Filter „Ungelesen“. Ein geöffnetes
+Gespräch wandert also beim nächsten Neuladen der Liste nach unten. Die Suche hat ihre eigene
+Sortierung (`SearchSortOrder`) und bleibt unverändert; die iOS-App sortiert selbst über JMAP.
+
+Geändert (markiert): `src/Domain/Enum/Mail/ListSortOrder.php` (neuer Fall `UnreadFirst`,
+Sortierung über ein `HIDDEN`-Select, weil die Listenabfragen `DISTINCT` sind),
+`translations/messages.*.yaml` (je eine Zeile `list.sort.unread`; das Sortiermenü übersetzt in der
+Domäne `messages`). Test `tests/Repository/Mail/Fork/UnreadFirstSortTest.php`.
+
+**Datenbank:** keine Änderung.
+**Grund:** Wunsch der Nutzer: was noch zu lesen ist, oben sehen, ohne den Filter „nur ungelesene“.
+**Kandidat fürs Original:** möglich (Funktion, kein Fehler; nur nach Freigabe vorschlagen).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,
