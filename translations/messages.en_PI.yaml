@@ -2617,6 +2617,8 @@ list:
     sort:
         newest: Freshest catch
         oldest: Oldest catch
+        # FORK (FORK.md 23)
+        unread: Unopened bottles first
 
 login:
     form:

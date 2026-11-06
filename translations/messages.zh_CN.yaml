@@ -2420,6 +2420,8 @@ list:
     sort:
         newest: '最新优先'
         oldest: '最早优先'
+        # FORK (FORK.md 23)
+        unread: '未读优先'
 login:
     form:
         email: '电子邮件地址'

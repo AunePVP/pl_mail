@@ -27,6 +27,12 @@ enum ListSortOrder: string
     case Oldest = 'oldest';
 
     /**
+     * FORK (FORK.md 23): conversations holding unread mail first, each group
+     * newest first — what is still to be read on top, then the list as usual.
+     */
+    case UnreadFirst = 'unread';
+
+    /**
      * Apply this order to a thread query built over the alias `t`.
      *
      * A method on the enum rather than an ORDER BY spelled at each call site,
@@ -37,6 +43,19 @@ enum ListSortOrder: string
     public function applyTo(QueryBuilder $qb, string $alias = 't'): QueryBuilder
     {
         $direction = self::Oldest === $this ? 'ASC' : 'DESC';
+
+        // FORK (FORK.md 23): a HIDDEN select rather than a CASE in ORDER BY —
+        // the list queries are DISTINCT, and PostgreSQL wants every ORDER BY
+        // expression of a DISTINCT query in its select list. `unreadCount > 0`
+        // is the same test the unread badges and filter use.
+        if (self::UnreadFirst === $this) {
+            $qb->addSelect(sprintf('CASE WHEN %s.unreadCount > 0 THEN 0 ELSE 1 END AS HIDDEN forkUnreadRank', $alias))
+                ->orderBy('forkUnreadRank', 'ASC')
+                ->addOrderBy($alias . '.lastMessageAt', $direction)
+                ->addOrderBy($alias . '.id', $direction);
+
+            return $qb;
+        }
 
         return $qb
             ->orderBy($alias . '.lastMessageAt', $direction)
