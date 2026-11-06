@@ -105,7 +105,9 @@ export default class extends Controller {
     }
 
     zoomOut() {
-        this.#rescale(Math.max(this._scale - 0.25, 0.5));
+        // FORK (FORK.md 24): floor 0.25 instead of 0.5, so zooming out never
+        // enlarges a wide plan that #fitScale() opened below 0.5.
+        this.#rescale(Math.max(this._scale - 0.25, 0.25));
     }
 
     // ── What the signing layer needs ──────────────────────────────────────
@@ -192,7 +194,35 @@ export default class extends Controller {
         this.statusTarget.hidden = true;
         this.pagesTarget.classList.remove("hidden");
 
+        // FORK (FORK.md 24): open a wide page (landscape plan) at the width of
+        // the reader rather than at 1.2 and a horizontal scrollbar.
+        this._scale = await this.#fitScale();
+
         await this.#buildPages();
+    }
+
+    /**
+     * FORK (FORK.md 24): the default scale, lowered until the widest of the
+     * first pages fits the scroller. Never above the old fixed 1.2, so portrait
+     * A4 opens exactly as before. Measured after the pages box is unhidden —
+     * a hidden scroller reports a width of 0.
+     */
+    async #fitScale() {
+        const style = getComputedStyle(this.scrollerTarget);
+        const available = this.scrollerTarget.clientWidth
+            - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+
+        let widest = 0;
+        for (let number = 1; number <= Math.min(this._doc.numPages, 3); number += 1) {
+            const page = await this._doc.getPage(number);
+            widest = Math.max(widest, page.getViewport({ scale: 1 }).width);
+        }
+
+        if (available <= 0 || widest <= 0) {
+            return 1.2;
+        }
+
+        return Math.max(0.25, Math.min(1.2, Math.floor((available / widest) * 100) / 100));
     }
 
     /**
@@ -211,7 +241,11 @@ export default class extends Controller {
             const viewport = page.getViewport({ scale: this._scale });
 
             const canvas = document.createElement("canvas");
-            canvas.className = "block shadow-sm bg-white max-w-full";
+            // FORK (FORK.md 24): no max-w-full. It capped the width of a wide
+            // page while the height below stayed fixed, which squashed every
+            // landscape plan sideways and made zooming in past the reader's
+            // width do nothing. The scroller scrolls sideways instead.
+            canvas.className = "block shadow-sm bg-white shrink-0";
             canvas.style.width = `${viewport.width}px`;
             canvas.style.height = `${viewport.height}px`;
             canvas.dataset.page = String(number);

@@ -632,6 +632,27 @@ Domäne `messages`). Test `tests/Repository/Mail/Fork/UnreadFirstSortTest.php`.
 **Grund:** Wunsch der Nutzer: was noch zu lesen ist, oben sehen, ohne den Filter „nur ungelesene“.
 **Kandidat fürs Original:** möglich (Funktion, kein Fehler; nur nach Freigabe vorschlagen).
 
+### 24. PDF-Vorschau: Querformat (Pläne) nicht mehr verzerrt
+
+Querformat-Seiten (z. B. Pläne in A3/A1) wurden in der PDF-Vorschau seitlich gestaucht. Jede Seite
+bekam eine feste CSS-Breite und -Höhe, dazu `max-w-full`: War die Seite breiter als das Fenster,
+kappte der Browser die Breite, die Höhe blieb – Verzerrung. Aus demselben Grund half Hineinzoomen
+über die Fensterbreite hinaus nicht.
+
+- Seiten ohne `max-w-full`; breiter als das Fenster heißt jetzt seitlich scrollen. Der Seitenstapel
+  ist `w-fit min-w-full`, damit der linke Rand einer breiten Seite erreichbar bleibt.
+- Anfangszoom passt die breiteste der ersten drei Seiten in die Fensterbreite, höchstens 1,2 wie
+  bisher (Hochformat A4 öffnet unverändert). Herauszoomen geht bis 0,25 statt 0,5.
+
+Geändert (markiert): `assets/controllers/mail/pdf_viewer_controller.js`,
+`templates/mail/_attachment_preview.html.twig`. Test `tests/e2e/fork-pdf-landscape.spec.ts`
+(scheitert mit dem alten Code). Unterschreiben unberührt: Es misst die Seite über
+`getBoundingClientRect()`, nicht über die CSS-Größe (pdf-sign/pdf-geometry-Specs grün).
+
+**Datenbank:** keine Änderung.
+**Grund:** Pläne als PDF-Anhang waren in der Vorschau unbrauchbar.
+**Kandidat fürs Original:** ja, Fehlerbehebung (dort erst Issue, nur nach Freigabe).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,
