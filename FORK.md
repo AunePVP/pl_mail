@@ -90,6 +90,9 @@ Lauf in der CI, etwa bei einem größeren Update vom Original: Actions → E2E �
 `CLAUDE.md` (Regeln, Arbeitsweise, Betrieb, Debuggen), `AGENTS.md` (Verweis darauf für Codex,
 Cursor, Gemini CLI u. a.) und der Eintrag `CLAUDE.local.md` in `.gitignore`.
 
+Die iOS-App ist ein eigener Fork (AunePVP/pl_mail_ios, lokal `ios/`, nur über `.git/info/exclude`
+ignoriert, keine Dateiänderung); CLAUDE.md → „iOS-App“ regelt, wann ein Web-Feature dort ein Issue bekommt.
+
 ### 7. Sicherheit: Antwort auf verschlüsselte Mail, Prelogin
 
 Zwei Funde aus einer Sicherheitsprüfung (2026-11-01), beide nicht im Original behoben.
