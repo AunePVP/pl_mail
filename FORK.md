@@ -578,6 +578,40 @@ bleibt der geplante Sync (Abfrageintervall des Kontos).
 **Datenbank:** keine Änderung.
 **Kandidat fürs Original:** ja (dort erst Issue, nur nach Freigabe).
 
+### 22. JMAP-Methoden für die iOS-App: Abmelden und KI-Suche
+
+Zwei Methoden nur dieses Forks, damit die iOS-App (AunePVP/pl_mail_ios, dort FORK.md 4 und 5) zeigt,
+was die Web-App kann:
+
+- **`ForkUnsubscribe/get`** (`accountId`, `ids`) → `list` mit `{id, url, fromBody}` oder
+  `{id, mailto}`: dasselbe Ziel wie der Abmelden-Knopf im Web (Abweichung 13), über
+  `ForkUnsubscribeExtension::target()`, also mit denselben Ausnahmen (Spam, Papierkorb, Entwürfe,
+  Antworten).
+- **`ForkSearch/insight`** (`query`, `parts` ⊆ `best`, `trips`, `answer`) → die drei Felder über den
+  Web-Suchtreffern (Abweichungen 16 und 18): beste Treffer (Reranker, Score ≥ 0,5, höchstens 3),
+  kommende Termine mit ihren Mails, Antwort des Sprachmodells. Jeder Thread mit `threadId`,
+  `accountId` und `emailId` der neuesten Mail. Nutzerweit wie die Web-Suche. Ein Teil, dessen Dienst
+  aus ist, kommt leer bzw. `null` zurück, nie als Fehler. `parts` erlaubt, die schnellen Teile
+  vor der langsamen Antwort abzurufen.
+- **`ForkSearch/chat`** (`message`, `conversation`) → eine Runde des KI-Such-Chats (Abweichung 20),
+  ganz (JMAP streamt nicht): `{conversation, queries, answer, important, results, error}`, Threads
+  wie oben. Ohne Sprachmodell `error: true`.
+
+Beide laufen unter `urn:ietf:params:jmap:mail`, ohne eigene Capability: der Server prüft beim Aufruf
+nicht, zu welcher Capability eine Methode gehört, und eine neue URN müsste in `Capability.php` und
+`SessionBuilder.php` (Dateien des Originals) eingetragen werden. Ein Server ohne den Fork antwortet
+`unknownMethod`, und die App zeigt nichts.
+
+Neue Dateien: `src/Jmap/Method/Fork/ForkUnsubscribeGetMethod.php`, `ForkSearchInsightMethod.php`,
+`ForkSearchChatMethod.php`,
+Tests `tests/Jmap/Method/Fork/`. Keine Änderung an Dateien des Originals (Methoden werden über
+`_instanceof JmapMethod` automatisch registriert).
+
+**Datenbank:** keine Änderung.
+
+**Grund:** Die iOS-App spricht nur JMAP; ohne diese Methoden fehlten ihr Abmelden-Knopf und KI-Suche.
+**Kandidat fürs Original:** nein (hängt an Abweichungen 13, 16, 18).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,
