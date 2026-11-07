@@ -579,6 +579,26 @@ Hamburg“ fand die Busbuchung deshalb nicht (Produktion 2026-11-03: 9 Treffer, 
 Suche nach Bedeutung, die Buchung nicht dabei).
 **Kandidat fürs Original:** als Idee (dort erst Issue, nur nach Freigabe).
 
+**Nachtrag 2026-11-07: KI-Kästen und Chat überstehen Listen-Refresh, „Zurück“ und Neuladen.**
+Beobachtet auf der Produktion (Zugriffslog): Solange eine Suche offen ist, liest
+`mail--mail-pane#_refreshList` die Liste bei jedem Sync-Ereignis, beim Polling und beim Zurückkehren
+zum Tab neu (alle 15–60 s) und morpht den Bereich `rows`. Die Kästen aus Abweichung 16 und der Chat
+stehen dort als erstes `<li>`, und die Server-Kopie davon ist leer: die drei Kästen klappten zu und
+luden neu (aus dem Cache, darum sofort wieder da), der Chat verlor seine Nachrichten und die
+Gesprächs-ID. Beide `<li>` (`_insight.html.twig`, `ai.html.twig`) tragen jetzt `data-swipe-owned`,
+das Zeichen des Originals für „hält der Client gerade“: `_mayMorph()` überspringt solche Knoten
+samt Inhalt. Kein Listeneintrag, also für Wischgesten und Zeilen-Code unsichtbar.
+Zweitens öffnete „Zurück“ (und F5) die KI-Suche neu und schickte die Frage noch einmal ans Modell:
+Die Mail-Seiten haben `turbo-cache-control: no-cache`, es gibt also nie einen Schnappschuss, und
+`connect()` fragte bei leerem Verlauf. Jetzt hält der Chat jede fertige Runde (alle Frames außer
+`token`) in `sessionStorage` (`fork-search-chat`, je Frage, höchstens 8 Fragen je Tab) und zeichnet
+sie beim Zurückkommen neu, mit Gesprächs-ID für Rückfragen. Der Knopf „KI-Suche“ vergisst die Frage
+vorher (`forgetSearchChat()`), Drücken ist also immer ein neuer Chat. Eine Runde, die beim Verlassen
+noch lief, ist nicht gespeichert und wird beim Zurückkommen neu gefragt.
+Geändert (nur Fork-Dateien): `templates/fork/search/_insight.html.twig`, `ai.html.twig`,
+`assets/controllers/fork/search_chat_controller.js`, `ai_search_controller.js`; Browsertest
+`tests/e2e/fork-search-refresh.spec.ts`. **Datenbank:** keine Änderung.
+
 ### 21. IDLE alle 5 statt 29 Minuten neu anstoßen
 
 `IDLE_REISSUE_SECONDS` in `src/Service/Imap/ImapIdleListener.php` ist 5 Minuten statt 29 (mit

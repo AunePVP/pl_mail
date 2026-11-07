@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import * as Turbo from "@hotwired/turbo";
+import { forgetSearchChat } from "./search_chat_controller.js";
 
 /**
  * FORK (FORK.md): the "KI-Suche" button in the search box. Opens the search
@@ -35,6 +36,10 @@ export default class extends Controller {
         }
 
         input.blur();
+
+        // Pressed, it is a new chat: one kept for the same words from earlier
+        // in this tab is what Back and a reload come back to, not this.
+        forgetSearchChat(q);
 
         Turbo.visit(`${this.urlValue}?q=${encodeURIComponent(q)}&fork_ai=1`, { frame: LIST_FRAME_ID });
     }

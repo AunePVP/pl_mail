@@ -12,7 +12,9 @@
 {% block inbox_tabs %}{% endblock %}
 
 {% block message_list %}
-    <li data-fork-search-insight>
+    {# data-swipe-owned: a list refresh leaves the chat alone (see _insight.html.twig).
+       Morphed, it lost its turns and its conversation id every 15–60 seconds. #}
+    <li data-fork-search-insight data-swipe-owned>
         {% if fork_search_chat() %}
             {% include 'fork/search/_chat.html.twig' with { q: q } %}
         {% else %}
