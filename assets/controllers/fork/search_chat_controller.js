@@ -15,9 +15,57 @@ import { jsonCsrfHeaders } from "../../csrf.js";
  * server sends is set as text: a subject is somebody else's words.
  *
  * Leaving the page aborts the fetch, and the server stops the model
- * (connection_aborted() there). A snapshot Turbo restores keeps its turns and
- * its conversation id on the element, and is not asked again.
+ * (connection_aborted() there).
+ *
+ * Every finished turn is kept in sessionStorage under the question the page
+ * was opened with (KEPT), and a page that comes back with it — Back, a reload
+ * — draws those turns again instead of asking. Turbo keeps no snapshot of the
+ * mail pages (turbo-cache-control no-cache in _layout/_mailbox.html.twig), so
+ * every Back fetched the page anew, and this sent the question to the model
+ * a second time as a new conversation: the same answer again, half a minute
+ * of the model's time, and the follow-ups gone. The "KI-Suche" button forgets
+ * the question first (forgetSearchChat()), so pressing it is a new chat.
  */
+
+/** sessionStorage key: { [question]: { conversation, turns: [{ message, frames }], at } }. */
+const KEPT = "fork-search-chat";
+
+/** Questions kept per tab; the oldest goes first. */
+const KEPT_MAX = 8;
+
+/** Turns kept per question, as many as the server remembers (ForkSearchChat::MAX_TURNS counts messages). */
+const KEPT_TURNS = 6;
+
+function readKept() {
+    try {
+        const kept = JSON.parse(sessionStorage.getItem(KEPT) ?? "{}");
+
+        return null !== kept && "object" === typeof kept && false === Array.isArray(kept) ? kept : {};
+    } catch {
+        return {};
+    }
+}
+
+function writeKept(kept) {
+    try {
+        const newest = Object.entries(kept).sort(([, a], [, b]) => (b?.at ?? 0) - (a?.at ?? 0)).slice(0, KEPT_MAX);
+
+        sessionStorage.setItem(KEPT, JSON.stringify(Object.fromEntries(newest)));
+    } catch {
+        // Full or switched off: the chat works as before, it only cannot come back.
+    }
+}
+
+/** The "KI-Suche" button's: what is typed is a new chat, whatever was asked before. */
+export function forgetSearchChat(question) {
+    const kept = readKept();
+
+    if (undefined === kept[question]) return;
+
+    delete kept[question];
+    writeKept(kept);
+}
+
 export default class extends Controller {
     static targets = ["log", "input", "submit", "userTemplate", "answerTemplate", "linkTemplate", "strings"];
 
@@ -26,9 +74,13 @@ export default class extends Controller {
     #controller = null;
 
     connect() {
-        if (0 === this.logTarget.children.length && "" !== this.questionValue.trim()) {
-            this.#ask(this.questionValue.trim());
-        }
+        const question = this.questionValue.trim();
+
+        if (0 !== this.logTarget.children.length || "" === question) return;
+
+        if (true === this.#restore(question)) return;
+
+        this.#ask(question);
     }
 
     disconnect() {
@@ -61,6 +113,8 @@ export default class extends Controller {
 
         const isCurrent = () => this.#controller === controller;
         let settled = false;
+        // What is kept of the turn: every frame but the tokens, which `done` repeats whole.
+        const frames = [];
 
         try {
             const response = await fetch(this.urlValue, {
@@ -80,8 +134,12 @@ export default class extends Controller {
             }
 
             await readFrames(response.body, (frame) => {
+                if ("token" !== frame?.type) frames.push(frame);
+
                 settled = this.#apply(turn, frame) || settled;
             }, isCurrent);
+
+            if (true === isCurrent() && "done" === frames.at(-1)?.type) this.#keep(message, frames);
 
             if (true === isCurrent() && false === settled) this.#fail(turn);
         } catch (error) {
@@ -93,6 +151,42 @@ export default class extends Controller {
                 this.inputTarget.focus({ preventScroll: true });
             }
         }
+    }
+
+    /** The turns kept for this question, drawn again; whether there were any. */
+    #restore(question) {
+        const kept = readKept()[question];
+
+        if (!Array.isArray(kept?.turns) || 0 === kept.turns.length) return false;
+
+        if ("string" === typeof kept.conversation) this.conversationValue = kept.conversation;
+
+        kept.turns.forEach((entry) => {
+            const { message, frames } = entry ?? {};
+
+            const user = this.userTemplateTarget.content.firstElementChild.cloneNode(true);
+            this.#slot(user, "text").textContent = String(message ?? "");
+            this.logTarget.append(user);
+
+            const turn = this.answerTemplateTarget.content.firstElementChild.cloneNode(true);
+            this.logTarget.append(turn);
+
+            (Array.isArray(frames) ? frames : []).forEach((frame) => this.#apply(turn, frame ?? {}));
+        });
+
+        return true;
+    }
+
+    #keep(message, frames) {
+        const question = this.questionValue.trim();
+
+        if ("" === question) return;
+
+        const kept = readKept();
+        const turns = Array.isArray(kept[question]?.turns) ? kept[question].turns : [];
+
+        kept[question] = { conversation: this.conversationValue, turns: [...turns, { message, frames }].slice(-KEPT_TURNS), at: Date.now() };
+        writeKept(kept);
     }
 
     /** @returns {boolean} whether the turn is over */
