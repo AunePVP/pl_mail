@@ -51,6 +51,8 @@
                    this view named the sender and nobody else, so who the mail
                    was addressed to was not on the page at all. #}
                 {% include 'mail/_message_details.html.twig' with { message: message } only %}
+                {# FORK (FORK.md): the message's project in Projektakte. #}
+                {% if fork_projektakte() %}<div class="mt-1">{% include 'fork/project/_chip.html.twig' with { message: message } only %}</div>{% endif %}
             </div>
             <p class="text-xs text-ink-faint flex-shrink-0">
                 {# Sent mail shows its sentAt: it has no receivedAt to show. #}

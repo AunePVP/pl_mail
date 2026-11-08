@@ -1,0 +1,81 @@
+{#
+fork/project/_chip.html.twig
+─────────────────────────────────────────────────────────────────────────────
+FORK (FORK.md 27): the Projektakte project of one message, in its header —
+"Projekt zuordnen", "BS-0000-0000 Name ×" or "Kein Projekt ×". A click opens
+the picker (assets/controllers/fork/project_picker_controller.js), whose
+content the server fetches from Projektakte; × takes the decision back.
+
+Nothing at all unless Projektakte is configured. When it is configured but
+down, the chip still shows what is stored here.
+
+The id is what the answer to every change replaces
+(_assigned.stream.html.twig).
+
+Variables:
+  message     Message
+  assignment  ForkMessageProject|null — optional; read with fork_project()
+              when not given
+#}
+{% if fork_projektakte() %}
+    {% set assignment = assignment is defined ? assignment : fork_project(message) %}
+    {% set status = assignment is null ? '' : assignment.status.value %}
+    {% set assignedHint = assignment is null ? 'message.fork_project.hint'|trans({}, 'fork')
+        : 'message.fork_project.assigned_by'|trans({ '%name%': assignment.assignedByName, '%date%': assignment.updatedAt|intl_date('dMMMy') ~ ', ' ~ assignment.updatedAt|date(clock.time) }, 'fork') %}
+
+    <span id="fork_project_{{ message.id }}"
+          class="relative inline-flex"
+          data-fork-project="{{ status }}"
+          data-controller="fork--project-picker"
+          data-fork--project-picker-url-value="{{ path('app_fork_project', { id: message.id }) }}"
+          data-fork--project-picker-i18n-value="{{ {
+              loading: 'message.fork_project.loading'|trans({}, 'fork'),
+              failed: 'message.fork_project.failed'|trans({}, 'fork'),
+          }|json_encode }}">
+        <span class="inline-flex items-center h-6 max-w-[14rem] rounded-full border border-line text-xs
+                     {{ assignment is null ? 'text-ink-muted' : 'text-ink' }}">
+            <button type="button"
+                    data-action="click->fork--project-picker#toggle"
+                    data-fork--project-picker-target="trigger"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    title="{{ assignedHint }}"
+                    class="inline-flex items-center gap-1 min-w-0 h-full pl-2 {{ assignment is null ? 'pr-2' : 'pr-1' }}
+                           rounded-full hover:bg-hover hover:text-ink whitespace-nowrap transition-colors duration-100">
+                <i class="fa-solid fa-folder-tree text-[11px] {{ assignment is null ? '' : 'text-accent' }}" aria-hidden="true"></i>
+                {# On a phone the header has room for the number, not the words:
+                   the label goes to screen readers only, the name away. #}
+                {% if assignment is null %}
+                    <span class="max-sm:sr-only">{{ 'message.fork_project.assign'|trans({}, 'fork') }}</span>
+                {% elseif status == 'assigned' %}
+                    <span class="font-medium tabular-nums" data-fork-project-number>{{ assignment.projectNumber }}</span>
+                    {% if assignment.projectName is not empty %}
+                        <span class="truncate max-sm:hidden">{{ assignment.projectName }}</span>
+                    {% endif %}
+                {% else %}
+                    <span>{{ 'message.fork_project.chip_none'|trans({}, 'fork') }}</span>
+                {% endif %}
+            </button>
+            {% if assignment is not null %}
+                <button type="button"
+                        data-action="click->fork--project-picker#clear"
+                        data-fork-project-clear
+                        title="{{ 'message.fork_project.remove'|trans({}, 'fork') }}"
+                        aria-label="{{ 'message.fork_project.remove'|trans({}, 'fork') }}"
+                        class="flex-shrink-0 inline-flex items-center justify-center h-full w-6 rounded-full
+                               text-ink-faint hover:text-ink hover:bg-hover transition-colors duration-100">
+                    <i class="fa-solid fa-xmark text-[10px]" aria-hidden="true"></i>
+                </button>
+            {% endif %}
+        </span>
+
+        {# Filled when it opens, every time: a project created a minute ago
+           has to be in it, and the guesses are Projektakte's to make. #}
+        <div data-fork--project-picker-target="panel"
+             role="dialog"
+             aria-label="{{ 'message.fork_project.title'|trans({}, 'fork') }}"
+             class="hidden absolute right-0 top-full mt-1 z-30 w-80 max-w-[calc(100vw-2rem)] max-h-96
+                    pointer-events-auto overflow-y-auto rounded-pane bg-pane-soft backdrop-blur-sm
+                    border border-line shadow-pop text-sm text-left"></div>
+    </span>
+{% endif %}

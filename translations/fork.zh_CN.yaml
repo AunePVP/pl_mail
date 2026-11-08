@@ -43,6 +43,26 @@ message:
         hint_link: "在新标签页中打开发件人的退订页面"
         hint_mail: "打开一封发往发件人退订地址的邮件"
         hint_body: "在新标签页中打开此邮件正文中的退订链接"
+    fork_project:
+        assign: "关联项目"
+        hint: "将此邮件归入 Projektakte 中的项目"
+        chip_none: "无项目"
+        assigned_by: "由 %name% 关联，%date%"
+        title: "关联项目"
+        loading: "正在加载项目 …"
+        failed: "操作未成功，请重试。"
+        unavailable: "暂时无法连接 Projektakte。"
+        unknown: "Projektakte 中没有这个项目。"
+        suggestions: "建议"
+        search: "搜索项目 …"
+        no_match: "未找到项目"
+        none: "与项目无关"
+        remove: "取消关联"
+        open: "在 Projektakte 中打开"
+        confidence:
+            sicher: "确定"
+            hoch: "很可能"
+            niedrig: "可能"
 search:
     fork_chat:
         off: "AI 搜索已关闭。开启方法：管理 → AI →“会话摘要”。"

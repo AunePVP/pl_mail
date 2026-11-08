@@ -43,6 +43,26 @@ message:
         hint_link: "Opens the sender's unsubscribe page in a fresh tab"
         hint_mail: "Opens a letter to the sender's unsubscribe address"
         hint_body: "Opens the unsubscribe link found in this letter's text in a fresh tab"
+    fork_project:
+        assign: "Stow in a project"
+        hint: "Stow this letter in a project's hold in Projektakte"
+        chip_none: "No project"
+        assigned_by: "Stowed by %name%, %date%"
+        title: "Stow in a project"
+        loading: "Haulin' up the projects …"
+        failed: "That went overboard. Try again, matey."
+        unavailable: "Projektakte be out o' hailing distance right now."
+        unknown: "Projektakte knows no such project."
+        suggestions: "Lookout's hunches"
+        search: "Search the projects …"
+        no_match: "No project in sight"
+        none: "Belongs to no project"
+        remove: "Unstow it"
+        open: "Board it in Projektakte"
+        confidence:
+            sicher: "certain"
+            hoch: "likely"
+            niedrig: "maybe"
 search:
     fork_chat:
         off: "The parrot be asleep. Wake it: Admin → AI → “Yarn-in-short”."
