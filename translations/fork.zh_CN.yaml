@@ -71,3 +71,5 @@ search:
         loading: "AI 正在阅读搜索结果……"
         answer_heading: "简要"
         disclaimer: "由 AI 根据前几条结果总结——如有疑问请打开邮件。"
+compose:
+    fork_names: "请检查姓名——与你的原文不一致：%names%"

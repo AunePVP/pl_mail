@@ -724,6 +724,52 @@ Neue Dateien: `src/Service/Fork/Attachment/ForkAttachmentReader.php`, `ForkAttac
 ohne das PDF selbst durchzusehen.
 **Kandidat fürs Original:** als Idee (dort erst Issue, nur nach Freigabe).
 
+### 26. Schreibhilfe ändert keine Namen mehr
+
+„Kürzer“, „förmlicher“ und „korrigieren“ in der Schreibhilfe des Editors schreiben Namen aus dem
+Entwurf jetzt Buchstabe für Buchstabe ab. Kommt ein Name trotzdem nicht so zurück, steht statt
+„Fertig“ in Rot „Bitte Namen prüfen – nicht wie in deinem Text: Strauss“, bevor jemand „Einfügen“ drückt.
+
+**Der Fehler:** „Förmlicher“ machte aus „Frau Strauss“ ein „Frau Strauß“ (15 von 15 Versuchen mit dem echten
+Entwurf) und einmal „Frau Straussler“. Mit Antwortkontext „ganzes Gespräch“ sieht das Modell den Verlauf,
+und darin unterschreibt die Empfängerin mit „Strauß“; das Modell „korrigiert“ den Entwurf danach. Ohne
+Verlauf 10 von 10 richtig. Die Prompts des Originals sagen „nichts hinzufügen“, aber nichts zu Namen.
+
+Zwei Teile in `src/Service/Fork/ForkNameGuard.php`:
+
+- **Regel im Prompt** (`RULE`): „Copy every name … letter for letter … never change ss to ß …“. Wird
+  bei den drei Umschreib-Aufgaben an den Systemprompt gehängt, nach dem Prompt der Aufgabe (auch einem
+  in Admin → KI geänderten) und vor der Persona. Gemessen: 15 von 15 Versuchen richtig; eine mildere
+  Fassung („Namen beibehalten“) scheiterte noch 11 von 15 Mal. Nicht bei „Antwort entwerfen“: dort
+  kommen Namen aus dem Gespräch, und die Schreibweise der Signatur ist meist die richtige.
+- **Prüfung ohne KI** (`missing()`): Namen im Entwurf sind die Wörter hinter einer Anrede oder einem
+  Gruß (Frau, Herr/Herrn, Hr., Fr., Mr./Mrs./Ms., Dear, Hallo, Hi, Liebe/r, Moin, Madame, Monsieur …,
+  akademische Titel dazwischen übersprungen) und ein zweites großgeschriebenes Wort davor, wenn danach
+  Satzzeichen oder Zeilenende kommt („Herr Max Müller,“). Jedes muss in der Antwort als ganzes Wort in
+  gleicher Schreibung vorkommen. Bloß großgeschriebene Wörter zählen nicht (deutsche Substantive);
+  „Team“, „Damen“, „Herren“ usw. auch nicht. Die Liste geht im `done`-Frame des Streams als `names` an
+  den Browser.
+
+Test: `tests/Service/Fork/ForkNameGuardTest.php`, Browsertest
+`tests/e2e/fork-names-ai-compose.spec.ts` (Name endet auf `ai-compose.spec.ts`, damit
+`playwright.config.ts` ihn ins Ein-Worker-Projekt legt, ohne dass die Konfiguration geändert wird).
+Text `compose.fork_names` in `translations/fork.*.yaml`.
+
+Änderungen an Dateien des Originals (mit `FORK (FORK.md)` markiert):
+
+- `src/Service/Ai/WritingAssistant.php` (`messagesFor()`): `ForkNameGuard::ruleFor($task)` zwischen
+  Aufgabenprompt und Persona.
+- `src/Controller/Mail/ComposeAssistController.php` (`generate()`): Feld `names` im `done`-Frame.
+  Der nicht gestreamte Endpunkt (`assist()`) bekommt die Regel, aber keine Prüfung; der Editor nutzt ihn nicht.
+- `assets/controllers/compose/ai_assist_controller.js`: Wert `forkNamesLabel`; bei `done` mit
+  `names` dieser Satz statt „Fertig“, rot (Inline-Farbe), `data-fork-names` am Statusfeld; `#say()`
+  setzt beides zurück.
+- `templates/compose/_window.html.twig`: Attribut `data-compose--ai-assist-fork-names-label-value`.
+
+**Datenbank:** keine Änderung.
+**Grund:** Ein falsch geschriebener Name in einer Geschäftsmail an die genannte Person darf nicht passieren.
+**Kandidat fürs Original:** ja, als Fehler (dort erst Issue, nur nach Freigabe).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,

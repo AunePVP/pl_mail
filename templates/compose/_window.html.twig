@@ -1152,7 +1152,9 @@ Variables: form, message, ctx (an App\Domain\DTO\Mail\ComposeContext)
                                 them — see the controller's #sentenceFor(). #}
                              data-compose--ai-assist-timeout-label-value="{{ 'compose.ai.error.timeout'|trans }}"
                              data-compose--ai-assist-not-pulled-label-value="{{ 'compose.ai.error.not_pulled'|trans }}"
-                             data-compose--ai-assist-refused-label-value="{{ 'compose.ai.error.refused'|trans }}">
+                             data-compose--ai-assist-refused-label-value="{{ 'compose.ai.error.refused'|trans }}"
+                             {# FORK (FORK.md): names the rewrite changed (ForkNameGuard). #}
+                             data-compose--ai-assist-fork-names-label-value="{{ 'compose.fork_names'|trans({}, 'fork') }}">
                             <button type="button"
                                     data-action="click->ui--dropdown#toggle"
                                     title="{{ 'compose.ai.label'|trans }}"

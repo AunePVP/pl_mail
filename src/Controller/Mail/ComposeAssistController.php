@@ -14,6 +14,7 @@ use App\Security\Voter\OwnershipVoter;
 use App\Service\Ai\OllamaClient;
 use App\Service\Ai\ReplyContextReader;
 use App\Service\Ai\WritingAssistant;
+use App\Service\Fork\ForkNameGuard;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -383,6 +384,8 @@ final class ComposeAssistController extends AbstractController
             // is the server's cleaned version rather than a second, browser-side
             // imitation of the same rule that would drift from it.
             'text'         => $result->content,
+            // FORK (FORK.md): names of the draft the answer lost or changed.
+            'names'        => ForkNameGuard::missing($task, $draft, $result->content),
             'promptTokens' => $result->timing->promptTokens,
             'evalTokens'   => $result->timing->evalTokens,
             // Milliseconds, converted here. Ollama counts in nanoseconds

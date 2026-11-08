@@ -71,3 +71,5 @@ search:
         loading: "L’IA lit les résultats …"
         answer_heading: "En bref"
         disclaimer: "Résumé par l’IA à partir des premiers résultats – en cas de doute, ouvrez le message."
+compose:
+    fork_names: "Vérifiez les noms – pas comme vous les avez écrits : %names%"
