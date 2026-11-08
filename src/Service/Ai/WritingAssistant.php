@@ -9,6 +9,7 @@ use App\Domain\Enum\Ai\WritingTask;
 use App\Entity\Ai\AiFeature;
 use App\Entity\Embeddable\AiPreferences;
 use App\Entity\User\User;
+use App\Service\Fork\ForkNameGuard;
 
 /**
  * Turns a request from the composer into a prompt, and the answer into text.
@@ -250,8 +251,10 @@ final readonly class WritingAssistant
             return null;
         }
 
+        // FORK (FORK.md): names in the draft stay as typed (ForkNameGuard::RULE),
+        // after the administrator's prompt and before the writer's persona.
         return [
-            ['role' => 'system', 'content' => $this->prompts->forTask($task) . $this->persona($user, $note)],
+            ['role' => 'system', 'content' => $this->prompts->forTask($task) . ForkNameGuard::ruleFor($task) . $this->persona($user, $note)],
             ['role' => 'user', 'content' => $this->brief($task, $draft, $context, $subject)],
         ];
     }

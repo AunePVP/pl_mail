@@ -71,3 +71,5 @@ search:
         loading: "The parrot be readin' the haul …"
         answer_heading: "In short, matey"
         disclaimer: "Summed up by the parrot from the first finds – when in doubt, open the letter."
+compose:
+    fork_names: "Mind the names, matey – not as ye wrote them: %names%"

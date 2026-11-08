@@ -106,6 +106,8 @@ export default class extends Controller {
         timeoutLabel: { type: String, default: "No answer" },
         notPulledLabel: { type: String, default: "No answer" },
         refusedLabel: { type: String, default: "No answer" },
+        // FORK (FORK.md): `%names%` is filled in here, from the `done` frame.
+        forkNamesLabel: { type: String, default: "Check the names: %names%" },
     };
 
     static targets = [
@@ -482,7 +484,22 @@ export default class extends Controller {
             }
 
             this.#drawMeter(true);
-            this.#settle(this.doneLabelValue, this.#timingTitle(frame));
+
+            // FORK (FORK.md): names of the draft that did not come back letter
+            // for letter (ForkNameGuard) — said where Insert is, in red.
+            const names = Array.isArray(frame.names) ? frame.names : [];
+
+            this.#settle(
+                0 < names.length ? this.forkNamesLabelValue.replace("%names%", names.join(", ")) : this.doneLabelValue,
+                this.#timingTitle(frame),
+            );
+
+            if (0 < names.length && true === this.hasStatusTarget) {
+                // Inline, not a class: text-ink-muted on the element would win or lose by
+                // stylesheet order.
+                this.statusTarget.style.color = "var(--color-danger)";
+                this.statusTarget.dataset.forkNames = names.join(",");
+            }
 
             return;
         }
@@ -614,6 +631,9 @@ export default class extends Controller {
 
         this.statusTarget.textContent = message;
         this.statusTarget.hidden = "" === message;
+        // FORK (FORK.md): a name warning lasts until the next thing is said.
+        this.statusTarget.style.removeProperty("color");
+        delete this.statusTarget.dataset.forkNames;
 
         // The numbers, where they can be read on purpose. They are in the
         // aria-hidden meter for the rest of the time precisely because they

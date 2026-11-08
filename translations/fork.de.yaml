@@ -71,3 +71,5 @@ search:
         loading: "KI liest die Treffer …"
         answer_heading: "Kurz gesagt"
         disclaimer: "Von der KI aus den ersten Treffern zusammengefasst – im Zweifel die Mail öffnen."
+compose:
+    fork_names: "Bitte Namen prüfen – nicht wie in deinem Text: %names%"

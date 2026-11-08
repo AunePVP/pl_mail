@@ -71,3 +71,5 @@ search:
         loading: "AI is reading the results …"
         answer_heading: "In short"
         disclaimer: "Summarised by AI from the first results – when in doubt, open the mail."
+compose:
+    fork_names: "Check the names – not as you wrote them: %names%"
