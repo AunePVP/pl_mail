@@ -14,6 +14,7 @@ use App\Jmap\Protocol\Exception\MethodException;
 use App\Jmap\Protocol\JmapContext;
 use App\Jmap\State\JmapObjectType;
 use App\Jmap\State\StateManager;
+use App\Repository\Fork\ForkMessageProjectRepository;
 use App\Repository\Label\LabelBindingRepository;
 use App\Repository\Mail\MessageRepository;
 use App\Service\Mail\ReplyFromResolver;
@@ -62,6 +63,13 @@ final class EmailGetMethod implements JmapMethod
     /** The property name; see the class docblock. */
     private const string REPLY_FROM = 'replyFrom';
 
+    /**
+     * FORK (FORK.md): Projektakte's project for this mail — null, or
+     * {status, project, projectName, assignedBy, assignedAt}. Opt-in by name
+     * like replyFrom, and loaded for the whole list in one query.
+     */
+    private const string FORK_PROJEKTAKTE = 'plmail:projektakte';
+
     public function __construct(
         private readonly AccountResolver $accountResolver,
         private readonly MessageRepository $messageRepository,
@@ -70,6 +78,7 @@ final class EmailGetMethod implements JmapMethod
         private readonly LabelBindingRepository $bindingRepository,
         private readonly IdentityResolver $identityResolver,
         private readonly ReplyFromResolver $replyFrom = new ReplyFromResolver(),
+        private readonly ?ForkMessageProjectRepository $forkProjects = null, // FORK (FORK.md): Projektakte
     ) {
     }
 
@@ -128,6 +137,11 @@ final class EmailGetMethod implements JmapMethod
 
         $withReplyFrom = null !== $properties && true === in_array(self::REPLY_FROM, $properties, true);
 
+        // FORK (FORK.md): Projektakte, every assignment of this answer in one query.
+        $forkProjects = null !== $properties && null !== $this->forkProjects && true === in_array(self::FORK_PROJEKTAKTE, $properties, true)
+            ? $this->forkProjects->findByMessageIds(array_map(static fn (Message $message): int => (int) $message->id, $messages))
+            : null;
+
         $list = [];
         $found = [];
 
@@ -144,6 +158,10 @@ final class EmailGetMethod implements JmapMethod
 
             if (true === $withReplyFrom) {
                 $email[self::REPLY_FROM] = $this->replyFromFor($message, $account);
+            }
+
+            if (null !== $forkProjects) {
+                $email[self::FORK_PROJEKTAKTE] = ($forkProjects[(int) $message->id] ?? null)?->toJmap();
             }
 
             $list[] = $email;

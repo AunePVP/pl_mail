@@ -790,6 +790,104 @@ Text `compose.fork_names` in `translations/fork.*.yaml`.
 **Grund:** Ein falsch geschriebener Name in einer Geschäftsmail an die genannte Person darf nicht passieren.
 **Kandidat fürs Original:** ja, als Fehler (dort erst Issue, nur nach Freigabe).
 
+### 27. Mails beim Lesen einem Projekt aus Projektakte zuordnen
+
+Projektakte ist ein eigenes Werkzeug des Büros neben plMail (Python/FastAPI, im LAN): Es liest die
+Projektordner und über JMAP die Mails, ordnet sie Projekten zu und beantwortet Fragen je Projekt.
+Die Zuordnung einer Mail entscheidet jetzt ein Mensch in plMail; Projektakte liest sie über JMAP und
+liefert dafür Projektliste und Vorschläge über eine kleine HTTP-API. Der Vertrag steht in Projektakte
+unter `docs/plmail-integration.md`.
+
+**Was man sieht:** Im Kopf jeder Nachricht eines Verlaufs (und in der Einzelansicht unter den
+Empfängern) ein Chip „Projekt zuordnen“, zugeordnet „BS-0000-0000 Projektname ×“ bzw. „Kein Projekt ×“
+(auf dem Handy nur die Nummer). Klick öffnet ein Popover wie das Label-Menü:
+
+- bis zu 3 **Vorschläge** von Projektakte mit Begründung und Sicherheit („sicher“, „wahrscheinlich“,
+  „vielleicht“); der erste ist markiert, sodass Enter ihn nimmt, aber **nichts wird ohne Klick bzw.
+  Taste zugeordnet**, auch bei „sicher“ nicht;
+- Suchfeld und die Projektliste (Nummer + Name, im Browser gefiltert, Pfeiltasten/Enter);
+- „Kein Projektbezug“, „Zuordnung entfernen“ und „In Projektakte öffnen“ (Link aus der Projektliste).
+
+Nach der Wahl ersetzt ein Turbo Stream den Chip. Die Zuordnung gilt **pro Nachricht**, bleibt beim
+Verschieben erhalten und geht **nie** zum Mailserver (kein Keyword, Label, Flag). Ohne Konfiguration
+ist alles unsichtbar (kein Chip, keine Abfrage, Routen 404). Ist Projektakte konfiguriert, aber nicht
+erreichbar, zeigt der Chip die gespeicherte Zuordnung weiter, das Popover sagt „Projektakte ist gerade
+nicht erreichbar.“; „Kein Projektbezug“ und „Entfernen“ gehen weiter, Zuordnen nicht (die Nummer lässt
+sich nicht prüfen).
+
+**Konfiguration** (Umgebungsvariablen am Container, Unraid-Vorlage; nicht in `.env`):
+
+- `PROJEKTAKTE_URL`: Basis-URL von Projektakte, **aus dem plmail-Container** erreichbar.
+- `PROJEKTAKTE_TOKEN`: dasselbe Geheimnis wie `INTEGRATION_TOKEN` in Projektakte.
+- Prüfen: `php bin/console app:fork:projektakte` (ruft `/api/integration/info`, zeigt Fehler samt
+  `detail`). In Projektakte zeigt `GET /health/deps` bei plMail `"project_extension": true`.
+
+**Schnittstelle zu Projektakte** (nur serverseitig, das Token kommt nie in den Browser; Header
+`Authorization: Bearer …`, Timeout 5 s, keine Weiterleitungen, jeder Fehler = „nicht erreichbar“,
+geloggt ohne Token):
+
+- `GET /api/integration/projects?q=&limit=500` – Liste, 300 s gecacht (nach Fehler 60 s), Schlüssel
+  je Adresse. Eine Nummer, die nicht in der Liste steht (neu angelegt oder älter als die ersten 500),
+  wird beim Zuordnen einzeln mit `q=<Nummer>` nachgefragt.
+- `POST /api/integration/suggest` (`subject`, `body` ≤ 20 000 Zeichen, `from`, Dateinamen der
+  Anhänge, `limit` 3) – je Mail 10 min gecacht (nach Fehler 60 s).
+- `POST /api/integration/notify` nach **jeder** Änderung, Timeout 2 s, Fehler nur im Log; die
+  Zuordnung bleibt, Projektakte holt sie beim regulären Abgleich.
+- `GET /api/integration/info` nur für `app:fork:projektakte`.
+
+**JMAP:** Capability `urn:plmail:params:jmap:projektakte` (Wert `{}`) oben in der Session und in jedem
+Konto, immer (auch ohne Konfiguration, die Daten stammen aus plMails Tabelle), und in
+`Capability::SUPPORTED`, sonst lehnt `JmapProcessor` Anfragen mit der URN in `using` ab.
+`Email/get` liefert die Eigenschaft **`plmail:projektakte`** nur, wenn sie in `properties` steht (wie
+`replyFrom`), für alle Mails der Antwort in einer Abfrage: `null` (nicht zugeordnet, auch nach
+„Entfernen“), `{"status":"assigned","project":"BS-0000-0000","projectName":"…","assignedBy":"…","assignedAt":"…Z"}`
+oder `{"status":"none","project":null,"projectName":"",…}`. `assignedBy` ist Vor- und Nachname, sonst
+die Anmeldeadresse, gespeichert als Text (überlebt das Löschen des Benutzers); `assignedAt` ist
+`updated_at` in UTC. Jede Änderung schreibt die Mail (und ihren Thread) als *updated* ins Change-Log
+(`MailChangeRecorder::emailChanged()`, ein `flush()` mit der Zeile), sonst sähe Projektakte sie nie in
+`Email/changes`. Kein `Email/set`, kein Filter in `Email/query`.
+
+Neue Dateien: `src/Entity/Fork/ForkMessageProject.php`, `src/Domain/Enum/Fork/ForkProjectStatus.php`,
+`src/Repository/Fork/ForkMessageProjectRepository.php`, `src/Service/Fork/Projektakte/`
+(`ForkProjektakteClient`, `ForkProjectAssigner`, `ForkProject`, `ForkProjectSuggestion`,
+`ForkProjectRefused`), `src/Controller/Fork/ForkProjectController.php` (`GET/POST/DELETE
+/mail/message/{id}/fork/project`), `src/Twig/Fork/ForkProjectExtension.php` (`fork_projektakte()`,
+`fork_project()`: eine Abfrage je Verlauf), `src/Command/Fork/ForkProjektakteCommand.php`,
+`templates/fork/project/_chip.html.twig`, `_picker.html.twig`, `_assigned.stream.html.twig`,
+`assets/controllers/fork/project_picker_controller.js`, Schlüssel `message.fork_project.*` in
+`translations/fork.*.yaml`, `migrations/Version20261108120000.php`, Tests
+`tests/Controller/Fork/ForkProjectTest.php`, `tests/Jmap/Method/Fork/ForkProjektakteEmailTest.php`,
+`tests/Support/Fork/FakeProjektakte.php`, Browsertest `tests/e2e/fork-project.spec.ts`.
+
+Änderungen an Dateien des Originals (mit `FORK (FORK.md)` markiert):
+
+- `src/Jmap/Protocol/Capability.php`: Konstante `PROJEKTAKTE`, Eintrag in `SUPPORTED`.
+- `src/Jmap/Session/SessionBuilder.php` (`build()`): je eine Zeile in `accountCapabilities` und in
+  den obersten `capabilities`.
+- `src/Jmap/Method/Mail/EmailGetMethod.php`: optionaler Konstruktorparameter
+  `?ForkMessageProjectRepository`, Opt-in `plmail:projektakte` neben `replyFrom`.
+- `templates/mail/_thread_message.html.twig`: ein `include` des Chips in `thread-message-meta` vor dem
+  Abmelden-Chip; `templates/mail/_message_content.html.twig`: eine Zeile unter den Empfängern.
+- `CONTRIBUTING.md`: eine Zeile für `app:fork:projektakte` in der Befehlstabelle
+  (`DocumentationCoverageTest`).
+
+**Datenbank:** eigene Tabelle `fork_message_project` (`message_id` eindeutig, `ON DELETE CASCADE`;
+`status` `assigned`/`none`; `project_number` VARCHAR(64) mit Index; `project_name`;
+`assigned_by_id` → `"user"` `ON DELETE SET NULL`; `assigned_by_name`; `created_at`/`updated_at`).
+„Entfernen“ löscht die Zeile. Keine Spalte in Tabellen des Originals. **Bekannte Grenze:**
+`ImapCopyMerger::fold()` hängt nur die Kindtabellen des Originals um; wird ein doppelt gespeichertes
+Exemplar einer Mail mit dem überlebenden zusammengelegt, verschwindet die Zuordnung des Duplikats per
+CASCADE (die des überlebenden bleibt). Akzeptiert; selten, und Projektakte sieht die Mail dann als
+nicht zugeordnet.
+
+Nicht gebaut (optional im Auftrag): Badge mit der Projektnummer in der Mailliste (bräuchte eine
+gebündelte Abfrage je Listenseite und eine Änderung an `_thread_row.html.twig`), Abschnitt in den
+Admin-Einstellungen (dafür `app:fork:projektakte`).
+
+**Grund:** Projektakte ordnete Mails bisher selbst über die Projektnummer im Betreff zu; das soll ein
+Mensch beim Lesen entscheiden.
+**Kandidat fürs Original:** nein (hängt an Projektakte, einem Werkzeug nur dieses Büros).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,

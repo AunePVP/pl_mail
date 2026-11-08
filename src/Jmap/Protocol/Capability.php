@@ -153,6 +153,13 @@ final class Capability
     public const string INBOX_TABS = 'urn:plmail:params:jmap:inboxtabs';
 
     /**
+     * FORK (FORK.md): the Email property `plmail:projektakte`, the
+     * Projektakte project a person filed the mail under. No methods; on every
+     * account and at the top level, empty.
+     */
+    public const string PROJEKTAKTE = 'urn:plmail:params:jmap:projektakte';
+
+    /**
      * Capabilities a client is currently allowed to declare in "using".
      * Grow this list as new object types come online.
      *
@@ -176,5 +183,6 @@ final class Capability
         self::TEMPLATES,
         self::KEYS,
         self::INBOX_TABS,
+        self::PROJEKTAKTE, // FORK (FORK.md): Projektakte
     ];
 }

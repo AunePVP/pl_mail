@@ -233,6 +233,8 @@ Variables:
         </div>
 
         <div class="thread-message-meta flex items-center gap-1 flex-shrink-0">
+            {# FORK (FORK.md): the message's project in Projektakte. #}
+            {% include 'fork/project/_chip.html.twig' with { message: message } only %}
             {# FORK (FORK.md): Unsubscribe from List-Unsubscribe, always in this spot. #}
             {% include 'fork/_unsubscribe.html.twig' with { message: message, variant: 'chip' } only %}
 

@@ -1,0 +1,15 @@
+{#
+fork/project/_assigned.stream.html.twig
+─────────────────────────────────────────────────────────────────────────────
+FORK (FORK.md 27): the answer to every change of a message's project — its
+chip, redrawn. Replacing the chip also closes the picker inside it.
+
+Variables:
+  message     Message
+  assignment  ForkMessageProject|null
+#}
+<turbo-stream action="replace" target="fork_project_{{ message.id }}">
+    <template>
+        {% include 'fork/project/_chip.html.twig' with { message: message, assignment: assignment } only %}
+    </template>
+</turbo-stream>

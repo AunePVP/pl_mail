@@ -104,6 +104,10 @@ final class SessionBuilder
                 // The user's tabs, answered by every account — see
                 // Capability::INBOX_TABS.
                 Capability::INBOX_TABS => new \stdClass(),
+                // FORK (FORK.md): Email.plmail:projektakte, on every account
+                // whether or not Projektakte is configured: the property is
+                // answered from plMail's own table either way.
+                Capability::PROJEKTAKTE => new \stdClass(),
             ];
 
             if ($accountId === $calendarAccountId) {
@@ -175,6 +179,7 @@ final class SessionBuilder
                 Capability::TEMPLATES => $this->templatesCapabilities(),
                 Capability::KEYS => $this->keysCapabilities(),
                 Capability::INBOX_TABS => new \stdClass(),
+                Capability::PROJEKTAKTE => new \stdClass(), // FORK (FORK.md): Projektakte
             ],
             'accounts' => $accountsValue,
             'primaryAccounts' => $primaryAccountsValue,

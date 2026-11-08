@@ -43,6 +43,26 @@ message:
         hint_link: "Öffnet die Abmeldeseite des Absenders in einem neuen Tab"
         hint_mail: "Öffnet eine Mail an die Abmeldeadresse des Absenders"
         hint_body: "Öffnet den Abmeldelink aus dem Text dieser Mail in einem neuen Tab"
+    fork_project:
+        assign: "Projekt zuordnen"
+        hint: "Diese Mail einem Projekt aus Projektakte zuordnen"
+        chip_none: "Kein Projekt"
+        assigned_by: "Zugeordnet von %name%, %date%"
+        title: "Projekt zuordnen"
+        loading: "Lädt Projekte …"
+        failed: "Das hat nicht geklappt. Bitte noch einmal versuchen."
+        unavailable: "Projektakte ist gerade nicht erreichbar."
+        unknown: "Dieses Projekt kennt Projektakte nicht."
+        suggestions: "Vorschläge"
+        search: "Projekt suchen …"
+        no_match: "Kein Projekt gefunden"
+        none: "Kein Projektbezug"
+        remove: "Zuordnung entfernen"
+        open: "In Projektakte öffnen"
+        confidence:
+            sicher: "sicher"
+            hoch: "wahrscheinlich"
+            niedrig: "vielleicht"
 search:
     fork_chat:
         off: "Die KI-Suche ist ausgeschaltet. Einschalten: Admin → KI → „Zusammenfassungen von Gesprächen“."

@@ -43,6 +43,26 @@ message:
         hint_link: "Ouvre la page de désabonnement de l'expéditeur dans un nouvel onglet"
         hint_mail: "Ouvre un message vers l'adresse de désabonnement de l'expéditeur"
         hint_body: "Ouvre le lien de désabonnement trouvé dans le texte de ce message dans un nouvel onglet"
+    fork_project:
+        assign: "Associer un projet"
+        hint: "Classer ce message dans un projet de Projektakte"
+        chip_none: "Aucun projet"
+        assigned_by: "Associé par %name%, %date%"
+        title: "Associer un projet"
+        loading: "Chargement des projets …"
+        failed: "Cela n'a pas fonctionné. Réessayez."
+        unavailable: "Projektakte est injoignable pour le moment."
+        unknown: "Projektakte ne connaît pas ce projet."
+        suggestions: "Suggestions"
+        search: "Rechercher un projet …"
+        no_match: "Aucun projet trouvé"
+        none: "Sans lien avec un projet"
+        remove: "Retirer l'association"
+        open: "Ouvrir dans Projektakte"
+        confidence:
+            sicher: "certain"
+            hoch: "probable"
+            niedrig: "possible"
 search:
     fork_chat:
         off: "La recherche IA est désactivée. Pour l'activer : Admin → IA → « Résumés de conversation »."

@@ -1,0 +1,133 @@
+{#
+fork/project/_picker.html.twig
+─────────────────────────────────────────────────────────────────────────────
+FORK (FORK.md 27): what the project chip opens — Projektakte's guesses, a
+search over its projects, "no project", and taking the decision back.
+
+The first guess is marked, so Enter or a click takes it, and nothing more:
+however sure Projektakte is, nothing is assigned until someone chooses.
+
+Projektakte down: one sentence instead of the list. "No project" and
+"Remove" need no list and stay.
+
+Variables:
+  message      Message
+  current      ForkMessageProject|null
+  currentUrl   string|null  — the current project's page in Projektakte
+  available    bool         — whether Projektakte answered
+  projects     list<ForkProject>
+  suggestions  list<ForkProjectSuggestion>
+#}
+{% set currentNumber = current is not null ? current.projectNumber : null %}
+
+{% macro check(on) %}
+    <i class="fa-solid fa-check w-3.5 flex-shrink-0 text-accent {{ on ? '' : 'invisible' }}" aria-hidden="true"></i>
+{% endmacro %}
+
+<div data-fork-project-picker class="p-1.5">
+    {% if not available %}
+        <p data-fork-project-unavailable class="px-2 py-2 text-xs text-ink-muted">
+            <i class="fa-solid fa-plug-circle-xmark mr-1 text-ink-faint" aria-hidden="true"></i>
+            {{ 'message.fork_project.unavailable'|trans({}, 'fork') }}
+        </p>
+    {% else %}
+        {% if suggestions is not empty %}
+            <p class="px-2 pt-1 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">
+                {{ 'message.fork_project.suggestions'|trans({}, 'fork') }}
+            </p>
+            <ul class="mb-1">
+                {% for suggestion in suggestions %}
+                    <li>
+                        <button type="button"
+                                data-action="fork--project-picker#choose"
+                                data-fork--project-picker-target="choice"
+                                data-number="{{ suggestion.project.number }}"
+                                data-fork-project-suggestion
+                                {% if loop.first %}data-preselected{% endif %}
+                                class="w-full flex items-start gap-2 px-2 py-1.5 rounded-lg text-left text-ink-soft
+                                       hover:bg-hover aria-selected:bg-accent-soft/40 aria-selected:text-ink transition-colors">
+                            {{ _self.check(suggestion.project.number == currentNumber) }}
+                            <span class="flex-1 min-w-0">
+                                <span class="flex items-baseline gap-1.5 min-w-0">
+                                    <span class="font-medium tabular-nums whitespace-nowrap">{{ suggestion.project.number }}</span>
+                                    <span class="truncate">{{ suggestion.project.name }}</span>
+                                </span>
+                                {% if suggestion.reason is not empty %}
+                                    <span class="block text-xs text-ink-faint">{{ suggestion.reason }}</span>
+                                {% endif %}
+                            </span>
+                            <span class="flex-shrink-0 text-[11px] {{ suggestion.confidence == 'niedrig' ? 'text-ink-faint' : 'text-accent' }}"
+                                  data-confidence="{{ suggestion.confidence }}">
+                                {{ ('message.fork_project.confidence.' ~ suggestion.confidence)|trans({}, 'fork') }}
+                            </span>
+                        </button>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        <label class="flex items-center gap-2 h-8 mx-0.5 px-2 rounded-lg border border-field-border bg-field text-ink-faint">
+            <i class="fa-solid fa-magnifying-glass text-[11px]" aria-hidden="true"></i>
+            <input type="search"
+                   data-fork--project-picker-target="search"
+                   data-action="input->fork--project-picker#filter keydown->fork--project-picker#key"
+                   placeholder="{{ 'message.fork_project.search'|trans({}, 'fork') }}"
+                   aria-label="{{ 'message.fork_project.search'|trans({}, 'fork') }}"
+                   autocomplete="off"
+                   class="flex-1 min-w-0 bg-transparent text-sm text-ink placeholder:text-ink-faint focus:outline-none">
+        </label>
+
+        <ul class="mt-1 max-h-56 overflow-y-auto" data-fork-project-list>
+            {% for project in projects %}
+                <li>
+                    <button type="button"
+                            data-action="fork--project-picker#choose"
+                            data-fork--project-picker-target="choice item"
+                            data-number="{{ project.number }}"
+                            data-search="{{ (project.number ~ ' ' ~ project.name)|lower }}"
+                            class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left text-ink-soft
+                                   hover:bg-hover aria-selected:bg-accent-soft/40 aria-selected:text-ink transition-colors">
+                        {{ _self.check(project.number == currentNumber) }}
+                        <span class="font-medium tabular-nums whitespace-nowrap">{{ project.number }}</span>
+                        <span class="truncate">{{ project.name }}</span>
+                    </button>
+                </li>
+            {% endfor %}
+        </ul>
+        <p data-fork--project-picker-target="noMatch" hidden class="px-2 py-2 text-xs text-ink-faint">
+            {{ 'message.fork_project.no_match'|trans({}, 'fork') }}
+        </p>
+    {% endif %}
+
+    <div class="mt-1 pt-1 border-t border-line">
+        <button type="button"
+                data-action="fork--project-picker#none"
+                data-fork-project-none
+                class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left text-ink-soft hover:bg-hover transition-colors">
+            {{ _self.check(current is not null and current.status.value == 'none') }}
+            {{ 'message.fork_project.none'|trans({}, 'fork') }}
+        </button>
+        {% if current is not null %}
+            <button type="button"
+                    data-action="fork--project-picker#clear"
+                    class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left text-ink-soft hover:bg-hover transition-colors">
+                <i class="fa-solid fa-xmark w-3.5 text-ink-faint" aria-hidden="true"></i>
+                {{ 'message.fork_project.remove'|trans({}, 'fork') }}
+            </button>
+        {% endif %}
+        {% if currentUrl is not null %}
+            <a href="{{ currentUrl }}"
+               target="_blank"
+               rel="noopener noreferrer"
+               data-turbo="false"
+               data-fork-project-open
+               class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-ink-soft hover:bg-hover transition-colors">
+                <i class="fa-solid fa-arrow-up-right-from-square w-3.5 text-ink-faint" aria-hidden="true"></i>
+                {{ 'message.fork_project.open'|trans({}, 'fork') }}
+            </a>
+        {% endif %}
+    </div>
+
+    <p data-fork--project-picker-target="status" role="status" aria-live="polite" hidden
+       class="px-2 pt-1 pb-0.5 text-xs text-danger"></p>
+</div>

@@ -43,6 +43,26 @@ message:
         hint_link: "Opens the sender's unsubscribe page in a new tab"
         hint_mail: "Opens a message to the sender's unsubscribe address"
         hint_body: "Opens the unsubscribe link found in this mail's text in a new tab"
+    fork_project:
+        assign: "Assign project"
+        hint: "File this mail under a project in Projektakte"
+        chip_none: "No project"
+        assigned_by: "Assigned by %name%, %date%"
+        title: "Assign project"
+        loading: "Loading projects …"
+        failed: "That did not work. Please try again."
+        unavailable: "Projektakte cannot be reached right now."
+        unknown: "Projektakte does not know this project."
+        suggestions: "Suggestions"
+        search: "Search projects …"
+        no_match: "No project found"
+        none: "Not about a project"
+        remove: "Remove assignment"
+        open: "Open in Projektakte"
+        confidence:
+            sicher: "certain"
+            hoch: "likely"
+            niedrig: "possible"
 search:
     fork_chat:
         off: "AI search is switched off. To switch it on: Admin → AI → “Thread summaries”."
