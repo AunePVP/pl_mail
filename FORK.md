@@ -888,6 +888,23 @@ Admin-Einstellungen (dafür `app:fork:projektakte`).
 Mensch beim Lesen entscheiden.
 **Kandidat fürs Original:** nein (hängt an Projektakte, einem Werkzeug nur dieses Büros).
 
+### 28. „Ungelesene zuerst“ ist die Standardsortierung
+
+Jede Mailliste öffnet mit der Sortierung „Ungelesene zuerst“ (Abweichung 23) statt „Neueste
+zuerst“, solange in der Sitzung nichts anderes gewählt wurde. Eine Wahl im Sortiermenü gilt wie
+bisher für die ganze Sitzung (`mail.list_sort`); nach dem nächsten Anmelden steht wieder
+„Ungelesene zuerst“. Die Suche (`SearchSortOrder`) und die iOS-App sind nicht betroffen.
+
+Geändert (markiert): `src/Controller/Mail/MailController.php` (`listSort()`: Rückfallwert
+`ListSortOrder::UnreadFirst`). Der Standard im Enum selbst (`fromSetting()`, Parameter der
+Repository-Methoden) bleibt `Newest`, damit die Änderung eine Zeile bleibt. Test
+`tests/Controller/Fork/ForkUnreadFirstDefaultTest.php`.
+
+**Datenbank:** keine Änderung.
+**Grund:** Wunsch der Nutzer: nicht bei jeder Sitzung erst von „Neueste“ auf „Ungelesene zuerst“
+umstellen müssen.
+**Kandidat fürs Original:** nein (Geschmackssache; das Original bleibt bei „Neueste zuerst“).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,

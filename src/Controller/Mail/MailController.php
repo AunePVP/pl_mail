@@ -131,7 +131,9 @@ final class MailController extends AbstractController
             return $sort;
         }
 
-        return ListSortOrder::fromSetting($session->get(self::SORT_SESSION_KEY));
+        // FORK (FORK.md 28): unread-first rather than newest-first when nothing
+        // was chosen yet in this session — what is still to be read on top.
+        return ListSortOrder::fromSetting($session->get(self::SORT_SESSION_KEY), ListSortOrder::UnreadFirst);
     }
 
     /**
