@@ -16,6 +16,7 @@ use App\Entity\Mail\Account;
 use App\Entity\Mail\Message;
 use App\Entity\Mail\MessageThread;
 use App\Entity\User\User;
+use App\Repository\Fork\ForkSentOrder;
 use App\Service\Search\FreeTextCompiler;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\DBAL\ArrayParameterType;
@@ -405,7 +406,8 @@ class MessageThreadRepository extends ServiceEntityRepository
 
         $this->narrowToUnread($qb, $unreadOnly);
 
-        $sort->applyTo($qb);
+        // FORK (FORK.md 29): Sent in the order you sent, not the order replies came.
+        LabelRole::Sent === $role ? ForkSentOrder::applyTo($qb, $sort) : $sort->applyTo($qb);
 
         return $qb->getQuery()->getResult();
     }
@@ -460,7 +462,8 @@ class MessageThreadRepository extends ServiceEntityRepository
         $this->onlyLiveDrafts($qb, $label->role);
         $this->narrowToUnread($qb, $unreadOnly);
 
-        $sort->applyTo($qb);
+        // FORK (FORK.md 29): one account's Sent folder, ordered as the Sent list.
+        LabelRole::Sent === $label->role ? ForkSentOrder::applyTo($qb, $sort) : $sort->applyTo($qb);
 
         return $qb->getQuery()->getResult();
     }
