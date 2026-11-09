@@ -11,6 +11,7 @@ use App\Domain\Enum\Mail\SendFailure;
 use App\Entity\Mail\MessageThread;
 use App\Repository\Mail\MessageRepository;
 use App\Repository\Mail\MessageThreadRepository;
+use App\Service\Fork\ForkSentView;
 use DateTimeImmutable;
 use Doctrine\Common\Collections\AbstractLazyCollection;
 use Symfony\Contracts\Service\ResetInterface;
@@ -58,6 +59,8 @@ final class ThreadRows implements ResetInterface
         private readonly MessageRepository $messages,
         private readonly MessageSnippet $snippet,
         private readonly BinView $bin,
+        // FORK (FORK.md 29): the Sent list draws its rows from your own mail.
+        private readonly ForkSentView $sent,
     ) {
     }
 
@@ -124,7 +127,7 @@ final class ThreadRows implements ResetInterface
     {
         $entities = array_values($thread->messages->toArray());
         $all      = array_map(ThreadRowMessage::of(...), $entities);
-        $kept     = $this->side($all);
+        $kept     = $this->side($all, $this->sent->sentOf($entities)); // FORK (FORK.md 29)
 
         // The entity behind the side's latest, for the body its snippet needs.
         $latest = null;
@@ -147,11 +150,15 @@ final class ThreadRows implements ResetInterface
      * The messages on the side being looked at: the deleted ones in Trash, the
      * others anywhere else — or all of them, when that side has none.
      *
+     * FORK (FORK.md 29): in the Sent list, of that side the messages carrying
+     * Sent ($sent, from ForkSentView; empty anywhere else).
+     *
      * @param list<ThreadRowMessage> $messages
+     * @param array<int, true>       $sent
      *
      * @return list<ThreadRowMessage>
      */
-    private function side(array $messages): array
+    private function side(array $messages, array $sent = []): array
     {
         $inBin = $this->bin->isOpen();
         $kept  = array_values(array_filter(
@@ -159,7 +166,7 @@ final class ThreadRows implements ResetInterface
             static fn (ThreadRowMessage $message): bool => $message->trashed === $inBin,
         ));
 
-        return [] === $kept ? $messages : $kept;
+        return ForkSentView::keep([] === $kept ? $messages : $kept, $sent);
     }
 
     /**
@@ -201,8 +208,14 @@ final class ThreadRows implements ResetInterface
         /** @var array<int, bool> $narrowed thread id => whether a side was left out */
         $narrowed = [];
 
+        // FORK (FORK.md 29): which messages carry Sent, asked only in the Sent list.
+        $sent = $this->sent->sentAmong(array_values(array_filter(array_map(
+            static fn (ThreadRowMessage $message): ?int => $message->id,
+            array_merge(...array_values($byThread)),
+        ))));
+
         foreach ($byThread as $threadId => $messages) {
-            $kept                = $this->side($messages);
+            $kept                = $this->side($messages, $sent);
             $narrowed[$threadId] = count($kept) < count($messages);
             $byThread[$threadId] = $kept;
         }

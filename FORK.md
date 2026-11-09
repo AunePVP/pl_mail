@@ -905,6 +905,39 @@ Repository-Methoden) bleibt `Newest`, damit die Änderung eine Zeile bleibt. Tes
 umstellen müssen.
 **Kandidat fürs Original:** nein (Geschmackssache; das Original bleibt bei „Neueste zuerst“).
 
+### 29. „Gesendet“ zeigt die eigene Mail, nicht die letzte Antwort
+
+„Gesendet“ listet Unterhaltungen, in denen eine Mail das Label Gesendet trägt. Die Zeile wurde
+aber aus der **neuesten Mail der ganzen Unterhaltung** gebaut: Kam nach der eigenen Mail eine
+Antwort, standen deren Empfänger („An: ich, …“), ihr Text, ihre Uhrzeit und ihr Ungelesen-Zustand
+in der Zeile, und die Zeile rückte nach oben. Das sah aus wie empfangene Mail im Gesendet-Ordner
+(gemeldet aus dem Büro: rund 20 % der Zeilen in „Gesendet“ waren so). Auf dem Server und in der
+Datenbank lag alles richtig.
+
+Jetzt wird eine Zeile in „Gesendet“ nur aus den Mails der Unterhaltung gebaut, die Gesendet tragen:
+Empfänger, Vorschau, Uhrzeit, Anzahl, Anhang und Fettschrift. Sortiert wird nach der neuesten
+eigenen Mail (`MAX(COALESCE(receivedAt, sentAt, createdAt))` über die Mails mit Gesendet), nicht nach
+`lastMessageAt`. „Ungelesene zuerst“ sortiert dort wie „Neueste zuerst“, weil eigene Mail gelesen
+abgelegt wird. Geöffnet zeigt die Unterhaltung weiter alle Mails mit den Antworten. Dasselbe gilt
+für den Gesendet-Ordner eines einzelnen Kontos (Label-Ansicht des Labels mit Rolle Sent) und für
+eine Zeile, die nach Stern oder Gelesen-Markieren in „Gesendet“ neu gezeichnet wird. Vorbild ist
+`BinView`, das im Papierkorb ebenso nur die gelöschte Seite einer Unterhaltung zeigt.
+
+Neu: `src/Service/Fork/ForkSentView.php` (wann „Gesendet“ angesehen wird, welche Mails Gesendet
+tragen), `src/Repository/Fork/ForkSentOrder.php` (Sortierung), `src/Twig/Fork/ForkSentViewExtension.php`
+(`fork_sent_view()`). Geändert (markiert): `src/Service/Mail/ThreadRows.php` (`side()` filtert in
+„Gesendet“ zusätzlich auf Gesendet), `src/Repository/Mail/MessageThreadRepository.php`
+(`findForRole()`, `findForLabel()`: bei Rolle Sent `ForkSentOrder`), `templates/_partials/_thread_row.html.twig`
+(`sent_scope` fällt auf `fork_sent_view()` zurück). Test `tests/Controller/Fork/ForkSentRowsTest.php`.
+
+Kosten: Die Sortierung braucht eine korrelierte Unterabfrage je Unterhaltung. Bei 14.500
+Unterhaltungen in „Gesendet“ ~170 ms statt ~45 ms für die Seite; die anderen Listen sind unberührt.
+
+**Datenbank:** keine Änderung.
+**Grund:** Nutzer sahen in „Gesendet“ empfangene Antworten und hielten sie für falsch abgelegt.
+**Kandidat fürs Original:** ja (Fehler im Original, Stand v0.4.2 und `main` vom 2026-11-09; erst Issue,
+nur nach Freigabe).
+
 ## Update vom Original
 
 Das Original veröffentlicht etwa alle 2–4 Tage ein Release (`vX.Y.Z`). Eingespielt wird ein Release-Tag,

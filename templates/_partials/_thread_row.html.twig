@@ -19,7 +19,9 @@ the conversation it answers.
 {# The Sent list, where the who column has the same problem the Drafts list had:
    every row is from you, so naming the sender fills the column with your own
    name and says nothing. See the `sent_scope` block further down. #}
-{% set sent_scope = sent_scope|default(false) %}
+{# FORK (FORK.md 29): falls back to fork_sent_view(), so a row redrawn after an
+   action in Sent, and one account's Sent folder, get the same column. #}
+{% set sent_scope = sent_scope|default(fork_sent_view()) %}
 {# The Snoozed list. Its rows answer "when does this come back", which is the
    only question that list is asked. #}
 {% set snooze_scope = snooze_scope|default(false) %}
