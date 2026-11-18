@@ -1,4 +1,18 @@
 admin:
+    fork_projektakte:
+        heading: "Projektakte"
+        reachable: "within hailin' distance"
+        unreachable: "lost in the fog"
+        intro: "plMail sends Projektakte only the letters a sailor stowed in a project's hold while readin' them — as .eml with all their cargo. Should the stowin' be changed, undone, marked \"Belongs to no project\", or the letter sent to Davy Jones for good, Projektakte hears of it too. All of it waits in the hold first and sails in the background; if Projektakte be lost in the fog, plMail tries again later (1 minute, growin' to 1 hour apart)."
+        waiting: "Waitin' in the hold"
+        last_error: "Last mishap"
+        no_error: "none, arr"
+        error_mail: "letter %id%"
+        retrying: "Tryin' again (%attempts% times so far, next at %next%): %error%"
+        resend: "Send all stowed letters to Projektakte"
+        resend_help: "For the maiden voyage and after a storm. Each stowed letter goes in the hold exactly once."
+        resend_progress: "Resend of %at%: %done% of %total% delivered …"
+        resend_done: "Resend of %at%: all %total% delivered."
     ai:
         field:
             reasoning: "Let the writin' model ponder"
@@ -44,6 +58,7 @@ message:
         hint_mail: "Opens a letter to the sender's unsubscribe address"
         hint_body: "Opens the unsubscribe link found in this letter's text in a fresh tab"
     fork_project:
+        push_note: "Stowed letters sail to Projektakte with all their cargo; \"Belongs to no project\" and \"Unstow it\" haul them back out."
         assign: "Stow in a project"
         hint: "Stow this letter in a project's hold in Projektakte"
         chip_none: "No project"

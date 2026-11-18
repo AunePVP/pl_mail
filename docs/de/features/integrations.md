@@ -1,4 +1,4 @@
-<!-- translated-from: features/integrations.md sha1:7f9932fddb5e543555f7c6a0aa6f89ba179cc80d -->
+<!-- translated-from: features/integrations.md sha1:ea7e00fed4f126fecd27a8cb22b27dc262ca6967 -->
 
 # Dateien und Integrationen
 
@@ -149,6 +149,27 @@ lokal gespeicherter.
 
 Ein Filter kann dasselbe automatisch tun, mit der Aktion **Anhänge speichern in**; siehe
 [Filter](filters.md).
+
+<!-- FORK (FORK.md 30): dieser Abschnitt. -->
+## Projektakte (nur in diesem Fork)
+
+In diesem Fork arbeitet plMail mit **Projektakte** zusammen, dem Projektarchiv des Büros. Das richtet
+ein, wer die Installation betreibt (`PROJEKTAKTE_URL`, `PROJEKTAKTE_TOKEN` am Container); sonst ist
+davon nichts zu sehen.
+
+- Beim Lesen ordnet der Chip **Projekt zuordnen** im Kopf einer Nachricht sie einem Projekt zu
+  (FORK.md 27). Nur so zugeordnete Mails gehen an Projektakte: plMail schickt sie kurz nach deiner
+  Wahl als originale `.eml` mit allen Anhängen. Sonst verlässt nichts plMail – keine anderen Mails,
+  keine Listen, keine Vorschauen –, und Projektakte hat keinen Zugang zu den Postfächern.
+- Ordnest du die Mail einem anderen Projekt zu, erfährt Projektakte das neue. **Kein Projektbezug**,
+  **Zuordnung entfernen**, endgültiges Löschen der Mail, Löschen ihres Kontos und Zurücksetzen der
+  Daten von plMail nehmen sie in Projektakte wieder heraus.
+- Alles läuft über eine Warteschlange, die Neustarts übersteht. Ist Projektakte nicht erreichbar,
+  versucht plMail es später erneut, erst nach einer Minute, dann in bis zu einer Stunde Abstand; das
+  Lesen wartet nie darauf.
+- **Admin → Integrationen → Projektakte** zeigt, ob Projektakte antwortet, wie viele Mails warten und
+  den letzten Fehler, und hat den Knopf **Alle zugeordneten Mails an Projektakte senden** für den
+  Start und nach Ausfällen – jede zugeordnete Mail genau einmal, mit Fortschritt.
 
 ## Wo du weiterliest
 

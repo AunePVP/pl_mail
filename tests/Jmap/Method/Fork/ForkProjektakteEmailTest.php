@@ -17,11 +17,14 @@ use App\Jmap\State\StateManager;
 use App\Repository\Fork\ForkMessageProjectRepository;
 use App\Service\Fork\Projektakte\ForkProjectAssigner;
 use App\Service\Fork\Projektakte\ForkProjektakteClient;
+use App\Service\Fork\Projektakte\ForkProjektakteOutboxStore;
+use App\Service\Fork\Projektakte\ForkProjektaktePush;
 use App\Service\Mail\MailChangeRecorder;
 use App\Tests\Jmap\JmapTestCase;
 use App\Tests\Support\Fork\FakeProjektakte;
 use Psr\Log\NullLogger;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Component\Messenger\MessageBus;
 
 /**
  * FORK (FORK.md 27): what Projektakte reads — the capability in the Session,
@@ -46,11 +49,13 @@ final class ForkProjektakteEmailTest extends JmapTestCase
         // Built here rather than taken from the container: seeding has already
         // made the container's own client, with the container's HTTP client.
         $container      = self::getContainer();
+        $client         = new ForkProjektakteClient($this->projektakte->client(), new ArrayAdapter(), new NullLogger(), $this->projektakte->url, FakeProjektakte::TOKEN);
         $this->assigner = new ForkProjectAssigner(
             $this->em,
             $container->get(ForkMessageProjectRepository::class),
-            new ForkProjektakteClient($this->projektakte->client(), new ArrayAdapter(), new NullLogger(), $this->projektakte->url, FakeProjektakte::TOKEN),
+            $client,
             $container->get(MailChangeRecorder::class),
+            new ForkProjektaktePush($container->get(ForkProjektakteOutboxStore::class), $client, new MessageBus(), new ArrayAdapter()),
         );
         $this->get      = $container->get(EmailGetMethod::class);
     }

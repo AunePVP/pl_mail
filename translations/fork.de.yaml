@@ -1,4 +1,18 @@
 admin:
+    fork_projektakte:
+        heading: "Projektakte"
+        reachable: "erreichbar"
+        unreachable: "nicht erreichbar"
+        intro: "plMail schickt Projektakte nur Mails, die ein Mensch beim Lesen einem Projekt zugeordnet hat – als .eml mit Anhängen. Wird die Zuordnung geändert, entfernt, auf „Kein Projektbezug“ gesetzt oder die Mail endgültig gelöscht, erfährt Projektakte das ebenfalls. Alles geht zuerst in eine Warteschlange und wird im Hintergrund zugestellt; ist Projektakte nicht erreichbar, versucht plMail es später erneut (nach 1 Minute bis zu 1 Stunde Abstand)."
+        waiting: "In der Warteschlange"
+        last_error: "Letzter Fehler"
+        no_error: "keiner"
+        error_mail: "Mail %id%"
+        retrying: "Wird erneut versucht (bisher %attempts%-mal, nächster Versuch %next%): %error%"
+        resend: "Alle zugeordneten Mails an Projektakte senden"
+        resend_help: "Für den Start und nach Ausfällen. Jede zugeordnete Mail geht genau einmal in die Warteschlange."
+        resend_progress: "Nachsenden vom %at%: %done% von %total% übertragen …"
+        resend_done: "Nachsenden vom %at%: alle %total% übertragen."
     ai:
         field:
             reasoning: 'Schreib-Modell darf nachdenken (Reasoning)'
@@ -44,6 +58,7 @@ message:
         hint_mail: "Öffnet eine Mail an die Abmeldeadresse des Absenders"
         hint_body: "Öffnet den Abmeldelink aus dem Text dieser Mail in einem neuen Tab"
     fork_project:
+        push_note: "Zugeordnete Mails gehen mit ihren Anhängen an Projektakte; „Kein Projektbezug“ und „Zuordnung entfernen“ nehmen sie dort wieder heraus."
         assign: "Projekt zuordnen"
         hint: "Diese Mail einem Projekt aus Projektakte zuordnen"
         chip_none: "Kein Projekt"

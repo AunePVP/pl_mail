@@ -128,6 +128,11 @@ Variables:
         {% endif %}
     </div>
 
+    {# FORK (FORK.md 30): what filing means for the mail, said where it is done. #}
+    <p data-fork-project-push-note class="px-2 pt-1.5 pb-0.5 text-[11px] leading-snug text-ink-faint">
+        {{ 'message.fork_project.push_note'|trans({}, 'fork') }}
+    </p>
+
     <p data-fork--project-picker-target="status" role="status" aria-live="polite" hidden
        class="px-2 pt-1 pb-0.5 text-xs text-danger"></p>
 </div>

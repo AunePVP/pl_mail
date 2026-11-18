@@ -99,7 +99,7 @@ final class ForkProjectTest extends WebTestCase
         $this->client->request('GET', $this->url($message));
 
         self::assertNull($this->row($message));
-        self::assertNotContains('/api/integration/notify', $this->projektakte->paths());
+        self::assertSame(0, $this->queued(), 'nothing is queued for Projektakte either');
     }
 
     public function testChoosingAProjectFilesTheMessageAndSaysSo(): void
@@ -121,7 +121,8 @@ final class ForkProjectTest extends WebTestCase
         self::assertSame('Rathaus Umbau', $row->projectName, 'the name is Projektakte\'s, not the request\'s');
         self::assertSame('Marker Fixture', $row->assignedByName);
 
-        self::assertSame(1, $this->asked('/api/integration/notify'));
+        self::assertSame(1, $this->queued(), 'queued for Projektakte (FORK.md 30), not sent while the click waits');
+        self::assertSame([], array_values(array_filter($this->projektakte->paths(), static fn (string $path): bool => str_starts_with($path, '/api/integration/mails/'))));
         self::assertContains((string) $message->id, $this->emailChanges());
         self::assertSame($jobs, $this->jobs(), 'nothing is queued for the mail server');
     }
@@ -152,7 +153,6 @@ final class ForkProjectTest extends WebTestCase
         self::assertResponseIsSuccessful();
         self::assertNull($this->row($message));
         self::assertStringContainsString('data-fork-project=""', $this->body());
-        self::assertSame(4, $this->asked('/api/integration/notify'));
         self::assertSame(1, $this->asked('/api/integration/projects'), 'the list is asked for once and then cached');
     }
 
@@ -165,7 +165,7 @@ final class ForkProjectTest extends WebTestCase
         self::assertResponseStatusCodeSame(422);
         self::assertSame('Projektakte does not know this project.', $this->error());
         self::assertNull($this->row($message));
-        self::assertSame(0, $this->asked('/api/integration/notify'));
+        self::assertSame(0, $this->queued());
     }
 
     /** Created since the list was cached, or older than its first 500. */
@@ -205,19 +205,6 @@ final class ForkProjectTest extends WebTestCase
         $this->send('DELETE', $message);
         self::assertResponseIsSuccessful();
         self::assertNull($this->row($message));
-    }
-
-    /** The regular round picks it up; the person's decision stands. */
-    public function testAFailedNotifyKeepsTheAssignment(): void
-    {
-        $message                        = $this->seedMessage();
-        $this->projektakte->notifyFails = true;
-
-        $this->send('POST', $message, ['number' => 'BS-0000-0001']);
-
-        self::assertResponseIsSuccessful();
-        self::assertSame('BS-0000-0001', $this->row($message)?->projectNumber);
-        self::assertSame(1, $this->asked('/api/integration/notify'));
     }
 
     public function testOnlyTheOwnerMayChooseOrLook(): void
@@ -263,7 +250,7 @@ final class ForkProjectTest extends WebTestCase
         self::assertFalse($client->isAvailable());
         self::assertNull($client->projects());
         self::assertNull($client->lookup('BS-0000-0001'));
-        $client->notify();
+        self::assertSame(0, $client->withdrawMail(1, 2)->status);
         self::assertFalse($client->info()['ok']);
         self::assertSame(0, $http->getRequestsCount());
 
@@ -331,6 +318,11 @@ final class ForkProjectTest extends WebTestCase
             "SELECT entity_id FROM jmap_change_log WHERE account_id = ? AND object_type = 'Email' AND change_type = 'updated'",
             [$this->account->id],
         ));
+    }
+
+    private function queued(): int
+    {
+        return (int) $this->connection->fetchOne('SELECT count(*) FROM fork_projektakte_outbox');
     }
 
     private function jobs(): int

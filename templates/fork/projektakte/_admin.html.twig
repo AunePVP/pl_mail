@@ -1,0 +1,84 @@
+{% import '_partials/_card_chrome.html.twig' as chrome %}
+{#
+    FORK (FORK.md 30): Projektakte under Admin → Integrations — whether it
+    answers, what waits to be sent, the last error, and "send all filed mail".
+    Rendered by ForkProjektakteAdminController into the frame that
+    fork/projektakte/_admin_frame.html.twig puts on the page; reloads itself
+    every few seconds while anything is waiting.
+
+    Variables: reachable, waiting, failing, lastError, resend, done
+#}
+<turbo-frame id="fork-projektakte-admin">
+    <div class="{{ chrome.shell() }}" data-testid="fork-projektakte-admin"
+         {% if waiting > 0 %}data-controller="fork--frame-refresh" data-fork--frame-refresh-seconds-value="5"{% endif %}>
+
+        <div class="flex items-center gap-3 {{ chrome.band() }}">
+            <i class="fa-solid fa-folder-tree text-base w-5 text-center text-accent" aria-hidden="true"></i>
+            <span class="text-sm font-semibold text-ink">Projektakte</span>
+
+            {% if reachable %}
+                <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500" data-fork-projektakte-reachable="yes">
+                    {{ 'admin.fork_projektakte.reachable'|trans({}, 'fork') }}
+                </span>
+            {% else %}
+                <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500" data-fork-projektakte-reachable="no">
+                    {{ 'admin.fork_projektakte.unreachable'|trans({}, 'fork') }}
+                </span>
+            {% endif %}
+        </div>
+
+        <div class="flex flex-col gap-3 px-4 py-4 text-sm">
+            <p class="text-ink-muted leading-snug">{{ 'admin.fork_projektakte.intro'|trans({}, 'fork') }}</p>
+
+            <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+                <dt class="text-ink-muted">{{ 'admin.fork_projektakte.waiting'|trans({}, 'fork') }}</dt>
+                <dd class="text-ink tabular-nums" data-fork-projektakte-waiting="{{ waiting }}">{{ waiting }}</dd>
+
+                <dt class="text-ink-muted">{{ 'admin.fork_projektakte.last_error'|trans({}, 'fork') }}</dt>
+                <dd class="text-ink-soft break-words" data-fork-projektakte-last-error>
+                    {% if lastError %}
+                        <span class="font-mono text-xs">{{ lastError.at|date('Y-m-d H:i') }}</span>
+                        {{ 'admin.fork_projektakte.error_mail'|trans({ '%id%': lastError.emailId }, 'fork') }}: {{ lastError.error }}
+                    {% else %}
+                        {{ 'admin.fork_projektakte.no_error'|trans({}, 'fork') }}
+                    {% endif %}
+                </dd>
+            </dl>
+
+            {% if failing %}
+                <div role="status" class="flex items-start gap-2.5 rounded-lg bg-amber-500/10 px-3.5 py-3 text-amber-500" data-fork-projektakte-retrying>
+                    <i class="fa-solid fa-rotate mt-0.5 shrink-0" aria-hidden="true"></i>
+                    <p class="leading-snug break-words">
+                        {{ 'admin.fork_projektakte.retrying'|trans({ '%attempts%': failing.attempts, '%next%': failing.next|date('H:i'), '%error%': failing.error }, 'fork') }}
+                    </p>
+                </div>
+            {% endif %}
+
+            {% if resend %}
+                {% set percent = resend.total > 0 ? (done * 100 / resend.total)|round : 100 %}
+                <div class="flex flex-col gap-1.5" data-fork-projektakte-resend>
+                    <p class="text-ink-soft">
+                        {% if done >= resend.total %}
+                            {{ 'admin.fork_projektakte.resend_done'|trans({ '%total%': resend.total, '%at%': resend.at|date('Y-m-d H:i') }, 'fork') }}
+                        {% else %}
+                            {{ 'admin.fork_projektakte.resend_progress'|trans({ '%done%': done, '%total%': resend.total, '%at%': resend.at|date('Y-m-d H:i') }, 'fork') }}
+                        {% endif %}
+                    </p>
+                    <div class="h-1.5 rounded-full bg-raised overflow-hidden" role="progressbar" aria-valuemin="0" aria-valuemax="{{ resend.total }}" aria-valuenow="{{ done }}">
+                        <div class="h-full bg-accent transition-all" style="width: {{ percent }}%"></div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <form method="post" action="{{ path('app_fork_projektakte_admin_resend') }}" class="flex flex-wrap items-center gap-3 pt-1">
+                <input type="hidden" name="_token" value="{{ csrf_token(constant('App\\Controller\\Fork\\ForkProjektakteAdminController::CSRF')) }}">
+                <button type="submit" data-fork-projektakte-resend-button
+                        class="inline-flex items-center gap-2 h-9 px-4 rounded-lg text-sm font-medium btn-quiet transition-colors cursor-pointer">
+                    <i class="fa-solid fa-paper-plane text-xs" aria-hidden="true"></i>
+                    {{ 'admin.fork_projektakte.resend'|trans({}, 'fork') }}
+                </button>
+                <span class="text-xs text-ink-faint">{{ 'admin.fork_projektakte.resend_help'|trans({}, 'fork') }}</span>
+            </form>
+        </div>
+    </div>
+</turbo-frame>

@@ -1,0 +1,18 @@
+{#
+    FORK (FORK.md 30): where the Projektakte section stands in Admin →
+    Integrations — a frame of its own, loaded after the page, because asking
+    Projektakte whether it answers may take seconds. Nothing without
+    PROJEKTAKTE_URL and PROJEKTAKTE_TOKEN.
+#}
+{% if fork_projektakte() %}
+    <div class="space-y-2 pt-4" id="admin-fork-projektakte">
+        <h3 class="px-4 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+            {{ 'admin.fork_projektakte.heading'|trans({}, 'fork') }}
+        </h3>
+        <turbo-frame id="fork-projektakte-admin" src="{{ path('app_fork_projektakte_admin') }}" loading="lazy">
+            <div class="py-6 text-center text-sm text-ink-faint">
+                <i class="fa-solid fa-circle-notch fa-spin mr-2" aria-hidden="true"></i>{{ 'admin.loading'|trans }}
+            </div>
+        </turbo-frame>
+    </div>
+{% endif %}

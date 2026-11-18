@@ -132,6 +132,26 @@ is materialised on first access and uploads exactly like a locally stored one.
 A filter can do the same thing automatically with the **Save attachments to** action; see
 [Filters](filters.md).
 
+<!-- FORK (FORK.md 30): this section. -->
+## Projektakte (this fork only)
+
+On this fork plMail can work with **Projektakte**, the office's own project archive. It is set up by
+whoever runs the installation (`PROJEKTAKTE_URL`, `PROJEKTAKTE_TOKEN` on the container) and is
+invisible otherwise.
+
+- While reading, the **Assign project** chip in a message's header files that message under a
+  project (FORK.md 27). Only mail filed this way ever goes to Projektakte: plMail sends it, as the
+  original `.eml` with all its attachments, a moment after you choose. Nothing else leaves — no
+  other mail, no lists, no previews — and Projektakte has no access to the mailboxes.
+- Moving the mail to another project tells Projektakte the new one. **Not about a project**,
+  **Remove assignment**, deleting the mail for good, deleting its account and resetting plMail's
+  data take it out of Projektakte again.
+- Everything goes through a queue that survives restarts. While Projektakte cannot be reached,
+  plMail tries again later, a minute and then up to an hour apart; reading mail never waits for it.
+- **Admin → Integrations → Projektakte** shows whether Projektakte answers, how many mails are
+  waiting and the last error, and has **Send all filed mail to Projektakte** for the first start
+  and after an outage — every filed mail once, with its progress.
+
 ## Where to read further
 
 - [Administration](admin.md) — enabling services, registering OAuth applications, pinning a server

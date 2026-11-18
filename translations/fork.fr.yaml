@@ -1,4 +1,18 @@
 admin:
+    fork_projektakte:
+        heading: "Projektakte"
+        reachable: "joignable"
+        unreachable: "injoignable"
+        intro: "plMail n'envoie à Projektakte que les messages qu'une personne a classés dans un projet en les lisant — en .eml avec leurs pièces jointes. Si le classement est modifié, retiré, mis sur « Sans lien avec un projet », ou si le message est supprimé définitivement, Projektakte en est informé aussi. Tout passe d'abord par une file d'attente et est livré en arrière-plan ; si Projektakte est injoignable, plMail réessaie plus tard (de 1 minute à 1 heure d'intervalle)."
+        waiting: "En file d'attente"
+        last_error: "Dernière erreur"
+        no_error: "aucune"
+        error_mail: "message %id%"
+        retrying: "Nouvel essai en cours (%attempts% fois jusqu'ici, prochain à %next%) : %error%"
+        resend: "Envoyer tous les messages classés à Projektakte"
+        resend_help: "Pour le démarrage et après une panne. Chaque message classé est mis en file une seule fois."
+        resend_progress: "Renvoi du %at% : %done% sur %total% livrés …"
+        resend_done: "Renvoi du %at% : les %total% sont livrés."
     ai:
         field:
             reasoning: 'Laisser le modèle d’écriture réfléchir'
@@ -44,6 +58,7 @@ message:
         hint_mail: "Ouvre un message vers l'adresse de désabonnement de l'expéditeur"
         hint_body: "Ouvre le lien de désabonnement trouvé dans le texte de ce message dans un nouvel onglet"
     fork_project:
+        push_note: "Les messages classés partent vers Projektakte avec leurs pièces jointes ; « Sans lien avec un projet » et « Retirer l'association » les y suppriment."
         assign: "Associer un projet"
         hint: "Classer ce message dans un projet de Projektakte"
         chip_none: "Aucun projet"
