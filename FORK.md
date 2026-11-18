@@ -831,8 +831,8 @@ geloggt ohne Token):
   wird beim Zuordnen einzeln mit `q=<Nummer>` nachgefragt.
 - `POST /api/integration/suggest` (`subject`, `body` ≤ 20 000 Zeichen, `from`, Dateinamen der
   Anhänge, `limit` 3) – je Mail 10 min gecacht (nach Fehler 60 s).
-- `POST /api/integration/notify` nach **jeder** Änderung, Timeout 2 s, Fehler nur im Log; die
-  Zuordnung bleibt, Projektakte holt sie beim regulären Abgleich.
+- ~~`POST /api/integration/notify`~~: seit Abweichung 30 entfallen; plMail schickt zugeordnete Mails
+  selbst (Push), Projektakte liest nicht mehr über JMAP.
 - `GET /api/integration/info` nur für `app:fork:projektakte`.
 
 **JMAP:** Capability `urn:plmail:params:jmap:projektakte` (Wert `{}`) oben in der Session und in jedem
@@ -937,6 +937,103 @@ Unterhaltungen in „Gesendet“ ~170 ms statt ~45 ms für die Seite; die andere
 **Grund:** Nutzer sahen in „Gesendet“ empfangene Antworten und hielten sie für falsch abgelegt.
 **Kandidat fürs Original:** ja (Fehler im Original, Stand v0.4.2 und `main` vom 2026-11-09; erst Issue,
 nur nach Freigabe).
+
+### 30. Zugeordnete Mails an Projektakte senden (Push)
+
+Bisher las Projektakte selbst über JMAP mit einem App-Passwort und kopierte dabei **alle** Mails
+aller Konten. Jetzt entscheidet plMail, was plMail verlässt: Nur Mails, die ein Mensch einem Projekt
+zugeordnet hat (Abweichung 27), gehen an Projektakte, als `.eml` mit allen Anhängen. Projektakte
+braucht danach keinen Zugang zu den Postfächern mehr (App-Passwort löschen). Der Vertrag steht in
+Projektakte unter `docs/plmail-push.md`. Adresse und Token wie bei 27 (`PROJEKTAKTE_URL`,
+`PROJEKTAKTE_TOKEN`); ohne sie wird nichts in die Warteschlange gelegt.
+
+**Was gesendet wird** (`accountId`/`emailId` = JMAP-ids, also die Zahlen von Konto und Nachricht):
+
+- neu zugeordnet → `PUT /api/integration/mails/{a}/{e}`, Körper die rohe Mail (`message/rfc822`,
+  `Content-Length`; die gespeicherte Rohfassung über `RawMessageResolver`, sonst die Rekonstruktion
+  aus `MessageSourceBuilder` wie beim JMAP-Blob-Download), Kopfzeile `X-Projektakte-Zuordnung` mit
+  `ForkMessageProject::toJmap()` als ASCII-JSON. Über 200 MB wird nicht gesendet (Fehler, verworfen).
+- **Kopfzeilen:** Jede gesendete `.eml` hat `Subject`, `From`, `To`, `Cc`, `Date` und `Message-ID`
+  (Projektakte liest Betreff, Absender und Datum daraus). Fehlt eine in der Quelle (erster MB bis zur
+  Leerzeile), setzt `ForkEmlHeaders` sie aus den Feldern der Nachricht davor, in der Zeilenendung der
+  Quelle, kodiert von Symfony Mime; vorhandene Zeilen bleiben unverändert, der Rest der Quelle wird
+  durchgestreamt. `To`/`Cc` nur, wenn die Nachricht solche Empfänger hat (eine leere Adressliste ist
+  keine gültige Kopfzeile), `Subject` auch leer, `Date` aus `sentAt` bzw. `receivedAt` (UTC), eine
+  fehlende `Message-ID` als `<plmail.{a}.{e}@projektakte.invalid>` (gleich bei jedem Senden).
+- **ids:** `{a}` ist `(string) $account->id` wie die Account-id der JMAP-Session (`SessionBuilder`),
+  `{e}` `(string) $message->id` wie die `id` aus `Email/get` (`EmailMapper`) – dieselben Schlüssel, unter
+  denen Projektakte Mails aus dem JMAP-Abgleich hat. Test `testTheIdsAreTheJmapIds`.
+- anderes Projekt → `PUT …/zuordnung` mit dem JSON; `404` → sofort die ganze Mail per `PUT`.
+- „Kein Projektbezug“, „Zuordnung entfernen“, endgültig gelöscht → `DELETE …/mails/{a}/{e}`.
+  Bei „Kein Projektbezug“ auch dann, wenn die Mail nie zugeordnet war (nur die ids gehen raus;
+  Projektakte könnte noch eine Kopie aus der Zeit des JMAP-Abgleichs haben).
+- `/notify` entfällt; `/projects`, `/suggest`, `/info` bleiben.
+
+**Warteschlange:** eigene Tabelle `fork_projektakte_outbox`, eine Zeile je Mail (eindeutig
+`account_id`, `email_id`; keine Fremdschlüssel, weil ein `DELETE` die Nachricht überleben muss).
+Einreihen ist ein Upsert: Je Mail zählt nur der letzte Stand (ein `DELETE` ersetzt ein noch nicht
+zugestelltes `PUT`; ein Projektwechsel vor der Zustellung bleibt ein ganzes `PUT`). Die Zustellung
+liest den **aktuellen** Stand der Zuordnung, nicht den beim Einreihen; die Aktion in der Zeile sagt nur,
+ob eine zugeordnete Mail ganz oder nur ihre Zuordnung gehen muss. Ein Bote holt sich eine Zeile mit
+`FOR UPDATE SKIP LOCKED` und einer Frist (`locked_until`, 30 min) und hält währenddessen keine
+Zeilensperre, damit ein Klick nie auf einen Upload wartet; `version` verhindert, dass eine Zustellung
+einen inzwischen neueren Stand löscht. Fehler: keine Verbindung, 5xx, 401/403/408/429 → erneut nach
+1, 2, 4 … min, höchstens 1 h, unbegrenzt oft; andere 4xx (400, 413, 422) → protokolliert
+(`Projektakte: a push was refused and is dropped`), als letzter Fehler gemerkt, Zeile verworfen.
+
+**Im Hintergrund:** Nach dem Einreihen geht `ForkProjektaktePushMessage` auf die Queue `maintenance`
+(per `#[AsMessage]`, keine Zeile in `messenger.yaml`; nicht `export`, damit ein 200-MB-Upload kein
+Senden aufhält). Der Handler stellt bis zu 4 min zu. Dazu jede Minute `ForkProjektaktePushTick` im
+Zeitplan `default` (per `#[AsCronTask]`, keine Zeile in `MaintenanceSchedule`): weckt einen Boten,
+wenn etwas fällig ist (Wiederholungen, Rest eines Nachsendens, verlorene Nachricht nach Neustart).
+
+**Löschen:** `ForkProjektakteErasureListener` (Doctrine `onFlush`/`postFlush`) merkt sich, welche der
+zu löschenden `Message`-Zeilen – oder welche Mails zu löschender **Konten** – zugeordnet waren, solange
+die Zuordnung noch in der Tabelle steht (sie geht per `ON DELETE CASCADE`), und reiht nach dem Commit
+je ein `DELETE` ein. Einzelne Nachrichten verschwinden immer über `MessageEraser`, Konten über
+`$em->remove($account)` (Einstellungen → Konten; mit einem Benutzer per `orphanRemoval`), beides durchs
+ORM. Die Warteschlange hat keine Fremdschlüssel, ihre Zeilen überleben Konto und Nachricht.
+**Daten zurücksetzen** (`DataResetter::reset()`, Admin bzw. `app:reset`) leert `message` per
+`TRUNCATE` an Doctrine vorbei: davor reiht es für jede zugeordnete Mail ein `DELETE` ein
+(`ForkProjektaktePush::queueRemovalOfFiled()`). Der Komplett-Reset (`fullReset()`) ebenso und lässt
+`fork_projektakte_outbox` beim Leeren aus, damit die DELETEs nach dem Reset noch zugestellt werden.
+Das lokale Skript `ops/reset-account5.sql` (nicht im Repo) reiht sie ebenfalls vorher ein.
+
+**Admin → Integrationen → Projektakte** (eigener, nachgeladener Frame; 404 ohne Konfiguration):
+erreichbar ja/nein (`/info`), Anzahl in der Warteschlange, letzter Fehler (Cache, 30 Tage) und
+ein fehlschlagender Eintrag mit nächstem Versuch, Knopf „Alle zugeordneten Mails an Projektakte
+senden“ (ein `INSERT … SELECT` über alle Zuordnungen mit Status `assigned`, jede Mail genau einmal)
+mit Fortschritt; der Frame lädt sich alle 5 s neu, solange etwas wartet. Im Projekt-Popover ein
+Satz, dass zugeordnete Mails mit Anhängen an Projektakte gehen.
+
+Neue Dateien: `src/Entity/Fork/ForkProjektakteOutbox.php`, `src/Domain/Enum/Fork/ForkPushAction.php`,
+in `src/Service/Fork/Projektakte/`: `ForkProjektakteOutboxStore`, `ForkProjektakteCourier`,
+`ForkProjektaktePush`, `ForkPushAnswer`, `ForkEmlHeaders`, `ForkProjektaktePushMessage`, `ForkProjektaktePushHandler`,
+`ForkProjektaktePushTick`, `ForkProjektakteErasureListener`;
+`src/Controller/Fork/ForkProjektakteAdminController.php` (`GET /admin/fork/projektakte`,
+`POST …/resend`), `templates/fork/projektakte/_admin.html.twig`, `_admin_frame.html.twig`,
+`assets/controllers/fork/frame_refresh_controller.js`, `migrations/Version20261118120000.php`,
+Schlüssel `admin.fork_projektakte.*` und `message.fork_project.push_note` in `translations/fork.*.yaml`,
+Test `tests/Controller/Fork/ForkProjektaktePushTest.php`. Geändert (Fork-Dateien):
+`ForkProjektakteClient` (`pushMail`, `pushAssignment`, `withdrawMail`, `reachable`; `notify` entfernt),
+`ForkProjectAssigner` (reiht ein statt `notify`), `templates/fork/project/_picker.html.twig`,
+`tests/Support/Fork/FakeProjektakte.php`, `ForkProjectTest`, `ForkProjektakteEmailTest`.
+
+Änderungen an Dateien des Originals (markiert):
+
+- `templates/admin/_integrations_frame.html.twig`: ein `include` vor `</turbo-frame>`.
+- `src/Service/Maintenance/DataResetter.php`: optionaler Konstruktorparameter
+  `?ForkProjektaktePush $forkProjektakte`, je ein Aufruf `queueRemovalOfFiled()` am Anfang von
+  `reset()` und `fullReset()`, in `fullReset()` die Tabelle `fork_projektakte_outbox` aus der
+  Liste der zu leerenden Tabellen genommen.
+- `docs/features/integrations.md` und `docs/de/features/integrations.md`: Abschnitt „Projektakte“
+  (Hilfe), Hash der Übersetzung angepasst.
+
+**Datenbank:** neue Tabelle `fork_projektakte_outbox` (mit dem Nutzer abgesprochen), keine Spalte in
+Tabellen des Originals.
+**Grund:** Projektakte soll nicht mehr alle Mails aller Konten lesen können; plMail gibt nur heraus,
+was ein Mensch einem Projekt zugeordnet hat.
+**Kandidat fürs Original:** nein (hängt an Projektakte).
 
 ## Update vom Original
 

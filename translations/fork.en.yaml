@@ -1,4 +1,18 @@
 admin:
+    fork_projektakte:
+        heading: "Projektakte"
+        reachable: "reachable"
+        unreachable: "not reachable"
+        intro: "plMail sends Projektakte only the mail a person filed under a project while reading it — as .eml with its attachments. When the assignment is changed, taken off, set to \"Not about a project\", or the mail is deleted for good, Projektakte is told as well. Everything goes into a queue first and is delivered in the background; while Projektakte cannot be reached, plMail tries again later (1 minute, growing to 1 hour apart)."
+        waiting: "Waiting in the queue"
+        last_error: "Last error"
+        no_error: "none"
+        error_mail: "mail %id%"
+        retrying: "Being retried (%attempts% times so far, next at %next%): %error%"
+        resend: "Send all filed mail to Projektakte"
+        resend_help: "For the start and after an outage. Each filed mail is queued exactly once."
+        resend_progress: "Resend of %at%: %done% of %total% delivered …"
+        resend_done: "Resend of %at%: all %total% delivered."
     ai:
         field:
             reasoning: 'Let the writing model reason'
@@ -44,6 +58,7 @@ message:
         hint_mail: "Opens a message to the sender's unsubscribe address"
         hint_body: "Opens the unsubscribe link found in this mail's text in a new tab"
     fork_project:
+        push_note: "Filed mail goes to Projektakte with its attachments; \"Not about a project\" and \"Remove assignment\" take it out there again."
         assign: "Assign project"
         hint: "File this mail under a project in Projektakte"
         chip_none: "No project"

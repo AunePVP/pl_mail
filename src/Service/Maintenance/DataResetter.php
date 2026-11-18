@@ -10,6 +10,7 @@ use App\Repository\Mail\AccountRepository;
 use App\Repository\Maintenance\DataResetRepository;
 use App\Service\Monitoring\WorkerRestartSignal;
 use App\Service\Push\PushTeardown;
+use App\Service\Fork\Projektakte\ForkProjektaktePush; // FORK (FORK.md 30)
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 use Throwable;
@@ -72,6 +73,8 @@ final readonly class DataResetter
         private string $jwtSecretKey,
         #[Autowire('%env(resolve:JWT_PUBLIC_KEY)%')]
         private string $jwtPublicKey,
+        // FORK (FORK.md 30): filed mail is taken out of Projektakte before the truncate.
+        private ?ForkProjektaktePush $forkProjektakte = null,
     ) {
     }
 
@@ -124,6 +127,10 @@ final readonly class DataResetter
     {
         // First, while the tokens and channel ids still exist to do it with.
         $pushRevoked = $this->revokePushFor($scope);
+
+        // FORK (FORK.md 30): every reset empties `message`; while the
+        // assignments still say which mails were filed, queue their DELETEs.
+        $this->forkProjektakte?->queueRemovalOfFiled();
 
         $tables = [
             'messenger_messages',
@@ -252,7 +259,10 @@ final readonly class DataResetter
             monitoring: true,
         ));
 
-        $tables = $this->tables->everyDataTable();
+        // FORK (FORK.md 30): queue the DELETEs for filed mail, and keep the
+        // queue itself, so Projektakte still hears of them after the reset.
+        $this->forkProjektakte?->queueRemovalOfFiled();
+        $tables = array_values(array_diff($this->tables->everyDataTable(), ['fork_projektakte_outbox']));
         $attempted = [];
 
         $this->tables->disableForeignKeyChecks();

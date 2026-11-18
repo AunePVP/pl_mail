@@ -12,15 +12,15 @@ use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
- * FORK (FORK.md 27): plMail's side of Projektakte's integration API — the
- * project list, suggestions for one message, and "something changed, come and
- * look".
+ * FORK (FORK.md 27, 30): plMail's side of Projektakte's integration API — the
+ * project list, suggestions for one message, and the mails a person filed
+ * under a project, pushed (FORK.md 30).
  *
  * Projektakte is the office's own tool beside plMail: it reads the project
- * folders and, over JMAP, the mail, and answers questions per project. A person
- * files a message under a project here, while reading it; Projektakte reads
- * that decision back from Email/get (plmail:projektakte) and offers the list
- * and its guesses through this API.
+ * folders and answers questions per project. A person files a message under a
+ * project here, while reading it, and plMail sends that message and nothing
+ * else (ForkProjektakteCourier); Projektakte has no access to the mailboxes.
+ * It offers the list and its guesses through this API.
  *
  * Server to server only. The token must never reach a browser, and the page's
  * CSP allows `connect-src 'self'` anyway, so every call starts here.
@@ -40,8 +40,8 @@ final readonly class ForkProjektakteClient
 
     private const float MAX_DURATION = 10.0;
 
-    /** notify() is fire-and-forget and must not hold the click that caused it. */
-    private const float NOTIFY_TIMEOUT = 2.0;
+    /** A whole mail of up to 200 MB, from the background, over the LAN or a VPN. */
+    private const float UPLOAD_DURATION = 1200.0;
 
     /** Projects appear a few times a week; a new one is also looked up directly (lookup()). */
     private const int LIST_TTL = 300;
@@ -217,29 +217,79 @@ final readonly class ForkProjektakteClient
     }
 
     /**
-     * Tell Projektakte an assignment changed, so it reads Email/changes now
-     * rather than at its next round. Fire-and-forget: a failure is logged and
-     * nothing else — the assignment stands, and the regular round finds it.
+     * FORK (FORK.md 30): send one mail with its assignment —
+     * PUT /api/integration/mails/{accountId}/{emailId}, the .eml as the body
+     * and the assignment as JSON in X-Projektakte-Zuordnung. json_encode()
+     * escapes everything beyond ASCII (ü as \u00fc) unless told otherwise,
+     * which is what a header needs.
+     *
+     * @param resource|string|\Closure            $eml a stream, or a closure handing out chunks (ForkProjektakteCourier)
+     * @param array<string, string|null>         $assignment as ForkMessageProject::toJmap()
      */
-    public function notify(): void
+    public function pushMail(int $accountId, int $emailId, mixed $eml, int $size, array $assignment): ForkPushAnswer
+    {
+        return $this->push('PUT', sprintf('/api/integration/mails/%d/%d', $accountId, $emailId), [
+            'body'         => $eml,
+            'headers'      => [
+                'Accept'                  => 'application/json',
+                'Content-Type'            => 'message/rfc822',
+                'Content-Length'          => (string) $size,
+                'X-Projektakte-Zuordnung' => json_encode($assignment, \JSON_THROW_ON_ERROR),
+            ],
+            // Idle time between bytes stays short; the whole upload may not.
+            'max_duration' => self::UPLOAD_DURATION,
+        ]);
+    }
+
+    /**
+     * FORK (FORK.md 30): a mail Projektakte already has moves to another
+     * project. 404 means it does not have it after all — send the mail.
+     *
+     * @param array<string, string|null> $assignment
+     */
+    public function pushAssignment(int $accountId, int $emailId, array $assignment): ForkPushAnswer
+    {
+        return $this->push('PUT', sprintf('/api/integration/mails/%d/%d/zuordnung', $accountId, $emailId), [
+            'json' => $assignment,
+        ]);
+    }
+
+    /** FORK (FORK.md 30): not about a project (any more), or gone. 200 whether or not Projektakte had it. */
+    public function withdrawMail(int $accountId, int $emailId): ForkPushAnswer
+    {
+        return $this->push('DELETE', sprintf('/api/integration/mails/%d/%d', $accountId, $emailId));
+    }
+
+    /**
+     * Whether Projektakte answers at all, for the settings — any answer to
+     * /info that is not a refused token counts.
+     */
+    public function reachable(): bool
+    {
+        return true === $this->info()['ok'];
+    }
+
+    /** @param array<string, mixed> $options */
+    private function push(string $method, string $path, array $options = []): ForkPushAnswer
     {
         if (false === $this->isAvailable()) {
-            return;
+            return new ForkPushAnswer(0, 'PROJEKTAKTE_URL and PROJEKTAKTE_TOKEN are not both set');
         }
 
         try {
-            $status = $this->http->request('POST', $this->base() . '/api/integration/notify', $this->options([
-                'body'         => '{}',
-                'headers'      => ['Accept' => 'application/json', 'Content-Type' => 'application/json'],
-                'timeout'      => self::NOTIFY_TIMEOUT,
-                'max_duration' => self::NOTIFY_TIMEOUT,
-            ]))->getStatusCode();
+            $response = $this->http->request($method, $this->base() . $path, $this->options($options));
+            $status   = $response->getStatusCode();
 
-            if (300 <= $status) {
-                $this->logger->warning('Projektakte: notify was refused', ['status' => $status]);
+            if (200 <= $status && 300 > $status) {
+                return new ForkPushAnswer($status);
             }
+
+            $body   = json_decode($response->getContent(false), true);
+            $detail = true === is_array($body) ? ($body['detail'] ?? null) : null;
+
+            return new ForkPushAnswer($status, true === is_string($detail) ? mb_substr($detail, 0, 500) : '');
         } catch (\Throwable $e) {
-            $this->logger->warning('Projektakte: notify did not arrive', ['error' => $e->getMessage()]);
+            return new ForkPushAnswer(0, $e->getMessage());
         }
     }
 

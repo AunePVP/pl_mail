@@ -1,4 +1,18 @@
 admin:
+    fork_projektakte:
+        heading: "Projektakte"
+        reachable: "可连接"
+        unreachable: "无法连接"
+        intro: "plMail 只向 Projektakte 发送有人在阅读时归入项目的邮件（.eml，含附件）。归属被更改、移除、设为“与项目无关”或邮件被永久删除时，也会通知 Projektakte。所有内容先进入队列，在后台送达；Projektakte 无法连接时，plMail 会稍后重试（间隔从 1 分钟增至 1 小时）。"
+        waiting: "队列中"
+        last_error: "最近错误"
+        no_error: "无"
+        error_mail: "邮件 %id%"
+        retrying: "正在重试（已 %attempts% 次，下次 %next%）：%error%"
+        resend: "将所有已归入项目的邮件发送到 Projektakte"
+        resend_help: "用于首次启用和故障之后。每封已归入的邮件只排队一次。"
+        resend_progress: "%at% 的重新发送：已送达 %done% / %total% …"
+        resend_done: "%at% 的重新发送：%total% 封全部送达。"
     ai:
         field:
             reasoning: '允许写作模型推理'
@@ -44,6 +58,7 @@ message:
         hint_mail: "打开一封发往发件人退订地址的邮件"
         hint_body: "在新标签页中打开此邮件正文中的退订链接"
     fork_project:
+        push_note: "已归入项目的邮件会连同附件发送到 Projektakte；“与项目无关”和“取消关联”会将其从那里删除。"
         assign: "关联项目"
         hint: "将此邮件归入 Projektakte 中的项目"
         chip_none: "无项目"

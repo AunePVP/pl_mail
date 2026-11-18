@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Service\Fork\Projektakte;
 
+use App\Domain\Enum\Fork\ForkProjectStatus;
+use App\Domain\Enum\Fork\ForkPushAction;
 use App\Entity\Fork\ForkMessageProject;
 use App\Entity\Mail\Message;
 use App\Entity\User\User;
@@ -12,8 +14,8 @@ use App\Service\Mail\MailChangeRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * FORK (FORK.md 27): a person files a message under a Projektakte project, says
- * it belongs to none, or takes either back.
+ * FORK (FORK.md 27, 30): a person files a message under a Projektakte project,
+ * says it belongs to none, or takes either back.
  *
  * Each of the three ends the same way, and the order is the point:
  *
@@ -23,8 +25,10 @@ use Doctrine\ORM\EntityManagerInterface;
  *     never see this one — the property changed, the message did not;
  *  3. one flush carries both, so a client can never see the new state without
  *     the change that announces it (MailChangeRecorder does not flush);
- *  4. Projektakte is told to look now. Fire-and-forget: its regular round
- *     reads the change log anyway.
+ *  4. the mail is queued for Projektakte (FORK.md 30): the whole mail when it
+ *     is newly filed, the new assignment when it moves between projects, a
+ *     DELETE when it is about none or undecided again. Queued, not sent: the
+ *     click never waits for Projektakte (ForkProjektaktePush).
  *
  * Nothing goes to the mail server. An assignment is plMail's and Projektakte's
  * business, not a keyword, label or flag that another client would show.
@@ -36,6 +40,7 @@ final readonly class ForkProjectAssigner
         private ForkMessageProjectRepository $rows,
         private ForkProjektakteClient        $projektakte,
         private MailChangeRecorder           $changes,
+        private ForkProjektaktePush          $push,
     ) {
     }
 
@@ -49,10 +54,11 @@ final readonly class ForkProjectAssigner
     {
         $project = $this->project($number);
         $row     = $this->rows->forMessage($message) ?? new ForkMessageProject($message);
+        $known   = ForkProjectStatus::Assigned === $row->status && null !== $row->id;
 
         $row->assign($project->number, $project->name, $user);
         $this->em->persist($row);
-        $this->announce($message);
+        $this->announce($message, true === $known ? ForkPushAction::Reassign : ForkPushAction::Send);
 
         return $row;
     }
@@ -64,7 +70,7 @@ final readonly class ForkProjectAssigner
 
         $row->markNone($user);
         $this->em->persist($row);
-        $this->announce($message);
+        $this->announce($message, ForkPushAction::Remove);
 
         return $row;
     }
@@ -79,7 +85,7 @@ final readonly class ForkProjectAssigner
         }
 
         $this->em->remove($row);
-        $this->announce($message);
+        $this->announce($message, ForkPushAction::Remove);
     }
 
     /**
@@ -105,10 +111,10 @@ final readonly class ForkProjectAssigner
         return $project;
     }
 
-    private function announce(Message $message): void
+    private function announce(Message $message, ForkPushAction $push): void
     {
         $this->changes->emailChanged((int) $message->account->id, (string) $message->id, false, $message->thread);
         $this->em->flush();
-        $this->projektakte->notify();
+        $this->push->queue($message, $push);
     }
 }

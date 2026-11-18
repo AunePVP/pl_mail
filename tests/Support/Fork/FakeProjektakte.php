@@ -8,9 +8,11 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
 /**
- * FORK (FORK.md 27): Projektakte's integration API as its contract describes
- * it (docs/plmail-integration.md over there), answered from a few made-up
- * projects, and every call kept for the test to look at.
+ * FORK (FORK.md 27, 30): Projektakte's integration API as its contract
+ * describes it (docs/plmail-integration.md and docs/plmail-push.md over
+ * there), answered from a few made-up projects, and every call kept for the
+ * test to look at. Pushed mails are kept by "accountId/emailId", as
+ * Projektakte keeps them.
  *
  * Each instance has an address of its own, because the project list is cached
  * by address in the app cache, which outlives a test.
@@ -24,10 +26,16 @@ final class FakeProjektakte
     /** Every connection refused. */
     public bool $down = false;
 
-    /** notify answers 500. */
-    public bool $notifyFails = false;
+    /** The push endpoints answer 500 (Projektakte up, but failing). */
+    public bool $pushFails = false;
 
-    /** @var list<array{method: string, path: string, query: array<string, string>, body: array<mixed>, auth: ?string}> */
+    /** The push endpoints answer this instead (400, 401, 413 …). */
+    public ?int $pushStatus = null;
+
+    /** @var array<string, array{eml: string, assignment: array<mixed>}> what Projektakte holds, by "accountId/emailId" */
+    public array $mails = [];
+
+    /** @var list<array{method: string, path: string, query: array<string, string>, body: array<mixed>, raw: string, headers: array<string, list<string>>, auth: ?string}> */
     public array $calls = [];
 
     /** @var list<array{number: string, name: string, url: string}> the list, newest first */
@@ -84,12 +92,16 @@ final class FakeProjektakte
         $path = (string) parse_url($url, \PHP_URL_PATH);
         parse_str((string) parse_url($url, \PHP_URL_QUERY), $query);
 
+        $raw = self::read($options['body'] ?? '');
+
         $this->calls[] = [
-            'method' => $method,
-            'path'   => $path,
-            'query'  => $query,
-            'body'   => json_decode((string) ($options['body'] ?? '{}'), true) ?? [],
-            'auth'   => $options['normalized_headers']['authorization'][0] ?? null,
+            'method'  => $method,
+            'path'    => $path,
+            'query'   => $query,
+            'body'    => json_decode('' !== $raw ? $raw : '{}', true) ?? [],
+            'raw'     => $raw,
+            'headers' => $options['normalized_headers'] ?? [],
+            'auth'    => $options['normalized_headers']['authorization'][0] ?? null,
         ];
 
         if (false === str_starts_with($url, $this->url . '/')) {
@@ -100,13 +112,89 @@ final class FakeProjektakte
             return new MockResponse('', ['error' => 'Connection refused']);
         }
 
+        if (1 === preg_match('~^/api/integration/mails/([\w.-]+)/([\w.-]+)(/zuordnung)?$~', $path, $m)) {
+            return $this->mail($method, $m[1] . '/' . $m[2], isset($m[3]), $raw, $options);
+        }
+
         return match ($path) {
             '/api/integration/info'     => self::json(['name' => 'Projektakte', 'version' => '0.3.0', 'assign_mode' => 'manual', 'projects' => count($this->projects)]),
             '/api/integration/projects' => self::json($this->list((string) ($query['q'] ?? ''))),
             '/api/integration/suggest'  => self::json(['suggestions' => $this->suggestions]),
-            '/api/integration/notify'   => true === $this->notifyFails ? new MockResponse('{"detail":"boom"}', ['http_code' => 500]) : new MockResponse('{}', ['http_code' => 202]),
             default                     => new MockResponse('{"detail":"Not Found"}', ['http_code' => 404]),
         };
+    }
+
+    /**
+     * The push endpoints, as Projektakte answers them.
+     *
+     * @param array<string, mixed> $options
+     */
+    private function mail(string $method, string $key, bool $assignmentOnly, string $raw, array $options): MockResponse
+    {
+        if (true === $this->pushFails) {
+            return new MockResponse('{"detail":"boom"}', ['http_code' => 500]);
+        }
+
+        if (null !== $this->pushStatus) {
+            return new MockResponse('{"detail":"refused"}', ['http_code' => $this->pushStatus]);
+        }
+
+        if ('DELETE' === $method) {
+            $had = isset($this->mails[$key]);
+            unset($this->mails[$key]);
+
+            return self::json(['status' => true === $had ? 'gelöscht' : 'nicht vorhanden']);
+        }
+
+        if ('GET' === $method) {
+            return self::json(['vorhanden' => isset($this->mails[$key]), 'wartet' => false, 'zuordnung' => $this->mails[$key]['assignment'] ?? null]);
+        }
+
+        if (true === $assignmentOnly) {
+            if (false === isset($this->mails[$key])) {
+                return new MockResponse('{"detail":"Mail nicht vorhanden"}', ['http_code' => 404]);
+            }
+
+            $this->mails[$key]['assignment'] = json_decode($raw, true);
+
+            return self::json(['status' => 'geändert']);
+        }
+
+        // Normalised headers come as "Name: value".
+        $line       = (string) ($options['normalized_headers']['x-projektakte-zuordnung'][0] ?? '');
+        $assignment = json_decode(trim(substr($line, (int) strpos($line, ':') + 1)), true);
+
+        if (false === is_array($assignment) || 'assigned' !== ($assignment['status'] ?? null)) {
+            return new MockResponse('{"detail":"nur zugeordnete Mails"}', ['http_code' => 422]);
+        }
+
+        $this->mails[$key] = ['eml' => $raw, 'assignment' => $assignment];
+
+        return new MockResponse('{"status":"angenommen"}', ['http_code' => 202]);
+    }
+
+    /** A body as the mock client hands it over: a string, a stream, or a closure. */
+    private static function read(mixed $body): string
+    {
+        if (true === is_string($body)) {
+            return $body;
+        }
+
+        if (true === is_resource($body)) {
+            return (string) stream_get_contents($body, -1, 0);
+        }
+
+        if ($body instanceof \Closure) {
+            $raw = '';
+
+            while ('' !== ($chunk = $body(16384))) {
+                $raw .= $chunk;
+            }
+
+            return $raw;
+        }
+
+        return '';
     }
 
     /** @return array{count: int, projects: list<array<string, string>>} */
